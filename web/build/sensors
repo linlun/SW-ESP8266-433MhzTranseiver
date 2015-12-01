@@ -1,0 +1,29 @@
+{
+  "status": true,
+  "heap": 10736,
+  "sensors": {
+    "temperature": 40.31,
+    "sensor_0": 31.81,
+    "sensor_1": 40.31,
+    "sensor_2": 40.13,
+    "sensor_3": 30.75
+  },
+  "pid": {
+    "Setpoint": 40.00,
+    "Kp": 500.00,
+    "Ki": 0.30,
+    "Kd": 0.00,
+    "aggKp": 2000.00,
+    "aggKi": 0.00,
+    "aggKd": 10.00,
+    "consKp": 500.00,
+    "consKi": 0.30,
+    "consKd": 0.00,
+    "pidPeriod": 15000,
+    "pidConservativeLimit": 5.00,
+    "output": 0.00,
+    "PTerm": -156.25,
+    "ITerm": 4.79,
+    "DTerm": 0.00
+  }
+}
