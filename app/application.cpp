@@ -1,8 +1,23 @@
 #include <application.h>
 
 #include "AppSettings.h"
-
+#include "config.h"
+#include "rfreceiver.h"
 ApplicationSettingsStorage AppSettings;
+
+void rfreceiver_rx_int(void);
+void rfreceiver_timer_int(void);
+rfreceiver rf(PIN_RF_RX, &rfreceiver_rx_int, &rfreceiver_timer_int);
+
+void rfreceiver_timer_int(void)
+{
+	rf.timer_int();
+}
+
+void rfreceiver_rx_int(void)
+{
+	rf.rx_int();
+}
 
 BssList networks;
 void networkScanCompleted(bool succeeded, BssList list)
@@ -227,11 +242,15 @@ void startServers()
 	GetSSIDList();
 }
 
+void runRx(void)
+{
+	rf.Process();
+}
 
+Timer rf_Rx;
 void init()
 {
 	spiffs_mount(); // Mount file system, in order to work with files
-
 	//Define the aggressive and conservative Tuning Parameters
 	if (!AppSettings.exist())
 	{
@@ -286,5 +305,7 @@ void init()
 
 	// Run WEB server on system ready
 	System.onReady(startServers);
+
+	rf_Rx.initializeMs(10, runRx).start();
 
 }

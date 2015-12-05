@@ -10,28 +10,15 @@
 
 #define WIFI_SSID  "Linuxz"
 #define WIFI_PASS  "asdfghjkl"
-#ifdef Old_PCB
 
-#define PIN_DS18B20 5 // GPIO0
-#define PIN_LED_WS2812 16 // GPIO2
-#define PIN_RELAY 15 // GPIO2
-#define PIN_OLED_SDA	12
-#define PIN_OLED_SCL	13
-#define PIN_ROTARY_A	4
-#define PIN_ROTARY_B	14
-#define PIN_ROTARY_SW	2
-#else
-#define PIN_DS18B20 5 // GPIO0
-#define PIN_LED_WS2812 0 // GPIO2
-#define PIN_RELAY 15 // GPIO2
-#define PIN_OLED_SDA	12
-#define PIN_OLED_SCL	13
-#define PIN_ROTARY_A	14
-#define PIN_ROTARY_B	4
-#define PIN_ROTARY_SW	2
-#define ROTARY_CHx_INVERT_DIRECTION	1
-#endif
+#define PIN_RF_RX		55
 
-#define MAX_NUM_DS_SENSORS	6
+//IR_MAX_PULSE_WIDTH=4000UL
+//IR_MIN_STARTPULSE_WIDTH=10000UL
+
+#define IR_MIN_PULSE_WIDTH		120
+#define MAX_NR_TIMES	150
+// This may need to be changed if new protocols are introduced which have a lower number of pulses
+#define MIN_NUM_PULSES	60
 
 #endif /* APP_CONFIG_H_ */
