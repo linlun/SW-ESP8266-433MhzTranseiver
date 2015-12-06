@@ -18,6 +18,8 @@
 #include <user_config.h>
 #include <stdlib.h>
 
+#include <SmingCore/SmingCore.h>
+
 /* Protocol data structure */
 typedef struct {
 	uint8 protocol;

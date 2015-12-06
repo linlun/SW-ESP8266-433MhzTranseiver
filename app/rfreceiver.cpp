@@ -7,6 +7,7 @@
 
 #include <rfreceiver.h>
 
+
 rfreceiver::rfreceiver(uint8_t inputpin,  void (*receiverInt)(void),  void (*timerInt)(void))
 {
 	rfRxChannel_state = 0u;
@@ -44,6 +45,7 @@ void rfreceiver::newPulse(uint16_t *buffer, uint8_t len, uint8_t index)
 		rfRxChannel_newData = true;
 		rfRxChannel_len = len;
 		rfRxChannel_index = index;
+		this->Process();
 	}
 }
 
@@ -77,8 +79,9 @@ void rfreceiver::Process(void)
 	case RF_STATE_RECEIVING:
 		if (rfRxChannel_newData == true) {
 			ETS_INTR_LOCK();
-			rfRxChannel_newData = true;
+			rfRxChannel_newData = false;
 			ETS_INTR_UNLOCK();
+			//Serial.println("Got new data");
 			/* Let protocol driver parse and then send on CAN */
 			uint8_t res2 = 2;//parseProtocol(buf, rfRxChannel_len, rfRxChannel_index, &rfRxChannel_proto);
 			res2 = parseProtocol(buf, rfRxChannel_len, rfRxChannel_index, &rfRxChannel_proto);
@@ -102,9 +105,14 @@ void rfreceiver::Process(void)
 //					rfTxMsg.Data[5] = (rfRxChannel_proto.data>>16)&0xff;
 //					rfTxMsg.Data[6] = (rfRxChannel_proto.data>>8)&0xff;
 //					rfTxMsg.Data[7] = rfRxChannel_proto.data&0xff;
-
+					Serial.print("Got data: ");
+					Serial.print((uint8)((rfRxChannel_proto.data>>40)&0xff),16);
+					Serial.print((uint8)((rfRxChannel_proto.data>>32)&0xff),16);
+					Serial.print((uint8)((rfRxChannel_proto.data>>24)&0xff),16);
+					Serial.print((uint8)((rfRxChannel_proto.data>>16)&0xff),16);
+					Serial.print((uint8)((rfRxChannel_proto.data>>8)&0xff),16);
+					Serial.println((uint8)(rfRxChannel_proto.data&0xff),16);
 //					StdCan_Put(&rfTxMsg);
-				Serial.println("Got parsed packet");
 			}
 			else if (rfRxChannel_proto.protocol == IR_PROTO_UNKNOWN)
 			{
@@ -113,6 +121,15 @@ void rfreceiver::Process(void)
 				//rfRxChannel_proto.timeout=300;
 #endif
 				rfRxChannel_state = RF_STATE_START_RECEIVE;
+				//Serial.println("Did not find proto");
+/*
+				while (rfRxChannel_len != 0)
+				{
+					Serial.print(" ");
+					Serial.print(buf[rfRxChannel_len]);
+					rfRxChannel_len--;
+				}
+			*/
 			}
 #if (RF_SEND_DEBUG==1)
 			else if (res2 == IR_SEND_DEBUG)
@@ -140,7 +157,7 @@ void rfreceiver::Process(void)
 
 			Ir_Protocol_Data_t	protoDummy;
 			//parseProtocol(buf, rfRxChannel_len, rfRxChannel_index, &protoDummy)
-			if (2 == IR_OK) {
+			if (parseProtocol(buf, rfRxChannel_len, rfRxChannel_index, &protoDummy) == IR_OK) {
 				if (protoDummy.protocol == rfRxChannel_proto.protocol) {
 					/* re-set timer so we can send release button event when no new RF is arriving */
 					_timer.initializeMs(rfRxChannel_proto.timeout, _timerInt).startOnce();
@@ -176,13 +193,35 @@ void rfreceiver::rx_int(void)
 
 	/* in continuous mode when short pulse arrives received len should be set to zero */
 	//TODO?
-		if ((pulsewidth < (IR_MIN_PULSE_WIDTH)) && (storeEnable == true))
+		if (((pulsewidth > (IR_MAX_PULSE_WIDTH)) || (pulsewidth < (IR_MIN_PULSE_WIDTH))) && (storeEnable == true))
 		{
+
+			if (len > MIN_NUM_PULSES)
+			{
+				/* Notify the application that a pulse has been received. */
+//				this->newPulse(buf, len, index);
+//				Serial.println("New");
+//				int16_t i = index - len;
+//				if (i < 0 )
+//				{
+//					i += MAX_NR_TIMES;
+//				}
+//				while (len != 0)
+//				{
+//					Serial.println(buf[len]);
+//					len--;
+//				}
+				Serial.print("len=");
+				Serial.println(len);
+			}
+
 			len = 0;
 			return;
 		}
 		else
 		{
+			//Serial.print(((pulsewidth >> 8) & 0xFF), 0);
+			//Serial.print(pulsewidth & 0xFF, 0);
 		}
 
 		if (storeEnable)

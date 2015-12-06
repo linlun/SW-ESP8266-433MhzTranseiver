@@ -76,15 +76,16 @@ int8 parseProtocol(const uint16 *buf, uint8 len, uint8 index, Ir_Protocol_Data_t
 	if (res!=IR_NOT_CORRECT_DATA) return res;
 #endif
 #if (IR_PROTOCOLS_USE_OREGON)
-	
+
 	res = parseOregon(buf, len, index, proto);
 	if (res!=IR_NOT_CORRECT_DATA) return res;
-#endif		
-	
+#endif
+
 	/* No protocol matched. */
 	proto->protocol = IR_PROTO_UNKNOWN;
 	return IR_NOT_CORRECT_DATA;
 }
+
 
 int8 parseHash(const uint16 *buf, uint8 len, Ir_Protocol_Data_t *proto) {
 	//TODO: Transform the buffer in some clever way to a 32 bit word. */
@@ -1155,23 +1156,31 @@ int8 parseNexa2(const uint16 *buf, uint8 len, uint8 index, Ir_Protocol_Data_t *p
 	if (len < 132) {
 		return IR_NOT_CORRECT_DATA;
 	}
+	//Serial.print(((pulsewidth >> 8) & 0xFF), 0);
+	//Serial.print(pulsewidth & 0xFF, 0);
+
+	//Serial.println("Nexa");
 	uint8 i;
 	i=index-132;
 	if (i>index)
 		i+=MAX_NR_TIMES;
 	if ((buf[i] < IR_NEXA2_START1 - IR_NEXA2_START1/IR_NEXA2_TOL_DIV) || (buf[i] > IR_NEXA2_START1 + IR_NEXA2_START1/IR_NEXA2_TOL_DIV)) { //check start bit
+		//Serial.println("1");
 		return IR_NOT_CORRECT_DATA;
+
 	}
 	i=index-131;
 	if (i>index)
 		i+=MAX_NR_TIMES;
 	if ((buf[i] < IR_NEXA2_HIGH - IR_NEXA2_HIGH/IR_NEXA2_TOL_DIV) || (buf[i] > IR_NEXA2_HIGH + IR_NEXA2_HIGH/IR_NEXA2_TOL_DIV)) { //check start bit
+		Serial.println("2");
 		return IR_NOT_CORRECT_DATA;
 	}
 	i=index-130;
 	if (i>index)
 		i+=MAX_NR_TIMES;
 	if ((buf[i] < IR_NEXA2_START2 - IR_NEXA2_START2/IR_NEXA2_TOL_DIV) || (buf[i] > IR_NEXA2_START2 + IR_NEXA2_START2/IR_NEXA2_TOL_DIV)) { //check start bit
+		Serial.println("3");
 		return IR_NOT_CORRECT_DATA;
 	}
 
@@ -1192,16 +1201,21 @@ int8 parseNexa2(const uint16 *buf, uint8 len, uint8 index, Ir_Protocol_Data_t *p
 				/* do nothing, a zero is already in rawbits */
 				bitCounter++;
 			} else {
+				Serial.print("4 ");
+				Serial.print(bitCounter);
+				Serial.print(" ");
+				Serial.println(i);
 				return IR_NOT_CORRECT_DATA;
 			}
 			i+=2; 	// skip every other bit, implement check here in the future
 		} else {			/* if odd, no data */
 			if ((buf[i2] < IR_NEXA2_HIGH - IR_NEXA2_HIGH/IR_NEXA2_TOL_DIV) || (buf[i2] > IR_NEXA2_HIGH + IR_NEXA2_HIGH/IR_NEXA2_TOL_DIV)) {
+				Serial.println("5");
 				return IR_NOT_CORRECT_DATA;
 			}
 		}
 	}
-	
+
 	proto->protocol=IR_PROTOCOL_NEXA2;
 	proto->timeout=IR_NEXA2_TIMEOUT;
 	proto->data=rawbitsTemp;
@@ -1951,9 +1965,11 @@ int8 parseOregon(const uint16 *buf, uint8 len, uint8 index, Ir_Protocol_Data_t *
 	  case 0xf824:
 	  case 0x1d20:
 	  case 0xf8b4:
-	    // Temperature and humidity
-	    //printf("Found temp\n");
-	    bitlenght = 40;
+		  {
+			// Temperature and humidity
+			//printf("Found temp\n");
+			bitlenght = 40;
+		  }
 	    break;
 	  case 0x2914:
 	    // Rain gage inches
@@ -2015,6 +2031,7 @@ int8 parseOregon(const uint16 *buf, uint8 len, uint8 index, Ir_Protocol_Data_t *
 	  case 0xf824:
 	  case 0x1d20:
 	  case 0xf8b4:
+	  {
 	   /* ----------- Data order rawbitsTemp ------ 
 	    * aa bc cc de ef
 	    * fe ed cc cb aa
@@ -2080,8 +2097,10 @@ int8 parseOregon(const uint16 *buf, uint8 len, uint8 index, Ir_Protocol_Data_t *
 	    proto->protocol=IR_PROTOCOL_OREGONTEMPHUM;
 	    proto->timeout=IR_OREGON_TIMEOUT;
 	    return IR_OK;
+	  }
 	    break;
 	  case 0x2914:
+	  {
 	    // Rain gage inches
 	    /* ----------- Data order rawbitsTemp ------ 
 	    * aa aa bb bb bb de ef
@@ -2149,10 +2168,15 @@ int8 parseOregon(const uint16 *buf, uint8 len, uint8 index, Ir_Protocol_Data_t *
 	    proto->protocol=IR_PROTOCOL_OREGONRAIN;
 	    proto->timeout=IR_OREGON_TIMEOUT;
 	    return IR_OK;
+	  }
 	    break;
 	    
 	  case 0x1994:
+		  {
+			  ;
+		  }
 	  case 0x1984:
+	  {
 	   /* ----------- Data order rawbitsTemp ------ 
 	    * a? ?b bb cc cd ee f
 	    * fe ed x? ?c cc aa a
@@ -2216,6 +2240,7 @@ int8 parseOregon(const uint16 *buf, uint8 len, uint8 index, Ir_Protocol_Data_t *
 	    proto->protocol=IR_PROTOCOL_OREGONWIND;
 	    proto->timeout=IR_OREGON_TIMEOUT;
 	    return IR_OK;
+	  }
 	    break;
 	    
 	  default: 

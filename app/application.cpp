@@ -18,6 +18,12 @@ void rfreceiver_rx_int(void)
 {
 	rf.rx_int();
 }
+void runRx(void)
+{
+	//rf.Process();
+}
+
+
 
 BssList networks;
 void networkScanCompleted(bool succeeded, BssList list)
@@ -242,10 +248,6 @@ void startServers()
 	GetSSIDList();
 }
 
-void runRx(void)
-{
-	rf.Process();
-}
 
 Timer rf_Rx;
 void init()

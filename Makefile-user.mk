@@ -29,7 +29,9 @@ SMING_HOME = C:\Users\linus\Documents\GitHub\Sming-ArduinoJson_R5_Alpha\Sming
 # COM_PORT = /dev/tty.usbserial
 
 # Com port speed
- COM_SPEED	= 115200
+ COM_SPEED	= 460800
+ #115200 230400
+ COM_SPEED_SERIAL = 460800
  
  # SPIFFs Location
 SPIFF_FILES = web/build
