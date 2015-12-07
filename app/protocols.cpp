@@ -1205,6 +1205,8 @@ int8 parseNexa2(const uint16 *buf, uint8 len, uint8 index, Ir_Protocol_Data_t *p
 				Serial.print(bitCounter);
 				Serial.print(" ");
 				Serial.println(i);
+				Serial.print(" ");
+				Serial.println(buf[i2]);
 				return IR_NOT_CORRECT_DATA;
 			}
 			i+=2; 	// skip every other bit, implement check here in the future

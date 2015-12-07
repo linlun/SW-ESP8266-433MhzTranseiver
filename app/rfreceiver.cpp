@@ -8,9 +8,79 @@
 #include <rfreceiver.h>
 
 
+
+
+void rfreceiver::rx_int(void)
+{
+	static uint32 prev_time;
+		uint16 pulsewidth;
+
+		/* Read the timer counter register to get the current "time". */
+		uint32 time = micros();
+
+		/* Subtract the current measurement from the previous to get the pulse width. */
+		pulsewidth = (uint16)(time - prev_time);
+		prev_time = time;
+
+	/* in continuous mode when short pulse arrives received len should be set to zero */
+	//TODO?
+		if (((pulsewidth > (IR_MAX_PULSE_WIDTH)) || (pulsewidth < (IR_MIN_PULSE_WIDTH))) && (storeEnable == true))
+		{
+			if (len > MIN_NUM_PULSES)
+			{
+				/* Notify the application that a pulse has been received. */
+//				this->newPulse(buf, len, index);
+//				Serial.println("New");
+//				int16_t i = index - len;
+//				if (i < 0 )
+//				{
+//					i += MAX_NR_TIMES;
+//				}
+//				while (len != 0)
+//				{
+//					Serial.println(buf[len]);
+//					len--;
+//				}
+				Serial.print("len=");
+				Serial.println(len);
+			}
+
+			len = 0;
+			return;
+		}
+		else
+		{
+			//Serial.print(((pulsewidth >> 8) & 0xFF), 0);
+			//Serial.print(pulsewidth & 0xFF, 0);
+		}
+
+		if (storeEnable)
+		{
+			/* Store the measurement. */
+			buf[index++] = pulsewidth;
+
+			if (index == MAX_NR_TIMES)
+			{
+				index = 0;
+			}
+			if (len++ == MAX_NR_TIMES)
+			{
+				len = MAX_NR_TIMES-1;
+			}
+			/* Notify the application that a pulse has been received. */
+			this->newPulse(buf, len, index);
+		}
+		else if (enable == true)
+		{
+			/* The first edge of the pulse train has been detected. Enable the storage of the following pulsewidths. */
+			storeEnable = true;
+			len = 0;
+		}
+}
+
 rfreceiver::rfreceiver(uint8_t inputpin,  void (*receiverInt)(void),  void (*timerInt)(void))
 {
-	rfRxChannel_state = 0u;
+	rfRxChannel_state = RF_STATE_RECEIVING;
 	rfRxChannel_newData = false;
 	rfRxChannel_len = 0u;
 	rfRxChannel_index = 0u;
@@ -106,6 +176,8 @@ void rfreceiver::Process(void)
 //					rfTxMsg.Data[6] = (rfRxChannel_proto.data>>8)&0xff;
 //					rfTxMsg.Data[7] = rfRxChannel_proto.data&0xff;
 					Serial.print("Got data: ");
+					Serial.print(rfRxChannel_proto.protocol);
+					Serial.print(" ");
 					Serial.print((uint8)((rfRxChannel_proto.data>>40)&0xff),16);
 					Serial.print((uint8)((rfRxChannel_proto.data>>32)&0xff),16);
 					Serial.print((uint8)((rfRxChannel_proto.data>>24)&0xff),16);
@@ -120,7 +192,7 @@ void rfreceiver::Process(void)
 				//send_debug(rfRxChannel_buf, rfRxChannel_len);
 				//rfRxChannel_proto.timeout=300;
 #endif
-				rfRxChannel_state = RF_STATE_START_RECEIVE;
+				//rfRxChannel_state = RF_STATE_START_RECEIVE;
 				//Serial.println("Did not find proto");
 /*
 				while (rfRxChannel_len != 0)
@@ -179,72 +251,5 @@ void rfreceiver::timer_int(void)
 {
 	_timerExpired = true;
 }
-void rfreceiver::rx_int(void)
-{
-	static uint32 prev_time;
-		uint16 pulsewidth;
 
-		/* Read the timer counter register to get the current "time". */
-		uint32 time = micros();
-
-		/* Subtract the current measurement from the previous to get the pulse width. */
-		pulsewidth = (uint16)(time - prev_time);
-		prev_time = time;
-
-	/* in continuous mode when short pulse arrives received len should be set to zero */
-	//TODO?
-		if (((pulsewidth > (IR_MAX_PULSE_WIDTH)) || (pulsewidth < (IR_MIN_PULSE_WIDTH))) && (storeEnable == true))
-		{
-
-			if (len > MIN_NUM_PULSES)
-			{
-				/* Notify the application that a pulse has been received. */
-//				this->newPulse(buf, len, index);
-//				Serial.println("New");
-//				int16_t i = index - len;
-//				if (i < 0 )
-//				{
-//					i += MAX_NR_TIMES;
-//				}
-//				while (len != 0)
-//				{
-//					Serial.println(buf[len]);
-//					len--;
-//				}
-				Serial.print("len=");
-				Serial.println(len);
-			}
-
-			len = 0;
-			return;
-		}
-		else
-		{
-			//Serial.print(((pulsewidth >> 8) & 0xFF), 0);
-			//Serial.print(pulsewidth & 0xFF, 0);
-		}
-
-		if (storeEnable)
-		{
-			/* Store the measurement. */
-			buf[index++] = pulsewidth;
-
-			if (index == MAX_NR_TIMES)
-			{
-				index = 0;
-			}
-			if (len++ == MAX_NR_TIMES)
-			{
-				len = MAX_NR_TIMES-1;
-			}
-			/* Notify the application that a pulse has been received. */
-			this->newPulse(buf, len, index);
-		}
-		else if (enable == true)
-		{
-			/* The first edge of the pulse train has been detected. Enable the storage of the following pulsewidths. */
-			storeEnable = true;
-			len = 0;
-		}
-}
 
