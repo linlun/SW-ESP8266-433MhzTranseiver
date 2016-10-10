@@ -2,8 +2,9 @@
 ## Parameters configured here will override default and ENV values.
 ## Uncomment and change examples:
 
-#Add your source directories here separated by space
+## Add your source directories here separated by space
 MODULES = app
+# EXTRA_INCDIR = include
 
 ## ESP_HOME sets the path where ESP tools and SDK are located.
 ## Windows:
@@ -14,11 +15,9 @@ MODULES = app
 
 ## SMING_HOME sets the path where Sming framework is located.
 ## Windows:
-#SMING_HOME = C:\Users\linus\Documents\GitHub\Sming\Sming
-SMING_HOME = C:\Users\linus\Documents\GitHub\Sming-ArduinoJson_R5_Alpha\Sming
+# SMING_HOME = c:/tools/sming/Sming 
 
-
-# MacOS / Linux
+## MacOS / Linux
 # SMING_HOME = /opt/sming/Sming
 
 ## COM port parameter is reqruied to flash firmware correctly.
@@ -28,10 +27,14 @@ SMING_HOME = C:\Users\linus\Documents\GitHub\Sming-ArduinoJson_R5_Alpha\Sming
 # MacOS / Linux:
 # COM_PORT = /dev/tty.usbserial
 
-# Com port speed
- COM_SPEED	= 460800
- #115200 230400
- COM_SPEED_SERIAL = 460800
- 
- # SPIFFs Location
+## Com port speed
+COM_SPEED	= 115200
+#115200
+
+## Configure flash parameters (for ESP12-E and other new boards):
+# SPI_MODE = dio
+
+## SPIFFS options
+#DISABLE_SPIFFS = 1
+#SPIFF_SIZE     = 196608
 SPIFF_FILES = web/build

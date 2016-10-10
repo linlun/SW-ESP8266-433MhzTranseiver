@@ -1,80 +1,50 @@
-#include <application.h>
-
-#include "AppSettings.h"
-#include "config.h"
+#include <user_config.h>
+#include <SmingCore/SmingCore.h>
+#include <AppSettings.h>
 #include "rfreceiver.h"
-ApplicationSettingsStorage AppSettings;
 
+HttpServer server;
+FTPServer ftp;
 void rfreceiver_rx_int(void);
-void rfreceiver_timer_int(void);
-rfreceiver rf(PIN_RF_RX, &rfreceiver_rx_int, &rfreceiver_timer_int);
+rfreceiver rf(PIN_RF_RX);
 
-void rfreceiver_timer_int(void)
-{
-	rf.timer_int();
-}
-
-void rfreceiver_rx_int(void)
-{
-	rf.rx_int();
-}
 void runRx(void)
 {
+	int i = 0;
+	for (i = 0; i < NR_BUFFERS; i++)
+	{
+
+		Serial.print(i);
+		Serial.print(" ");
+		Serial.print(rf.writeBufferPtr);
+		Serial.print(" ");
+		Serial.print(rf.readBufferPtr);
+		if (rf.buffers[i].active)
+		{
+			Serial.print("a");
+		} else
+		{
+			Serial.print(" ");
+		}
+		Serial.print(rf.buffers[i].lenght);
+		Serial.print("  ");
+		Serial.print(rf.buffers[i].startPtr);
+		Serial.print("  ");
+		Serial.print(rf.buffers[i].writePtr);
+		Serial.print("  ");
+		Serial.print(rf.buf_index);
+		Serial.print("\n");
+	}
 	//rf.Process();
 }
+void runRxProcess(void)
+{
 
-
-
+	//rf.Process();
+}
 BssList networks;
-void networkScanCompleted(bool succeeded, BssList list)
-{
-	if (succeeded)
-	{
-		for (int i = 0; i < list.count(); i++)
-			if (!list[i].hidden && list[i].ssid.length() > 0)
-				networks.add(list[i]);
-	}
-	networks.sort([](const BssInfo& a, const BssInfo& b){ return b.rssi - a.rssi; } );
-	for (int i = 0; i < networks.count(); i++)
-	{
-		Serial.print("SSID: ");
-		Serial.println(networks[i].ssid);
-	}
-}
-
-void GetSSIDList(void)
-{
-	WifiStation.startScan(networkScanCompleted);
-}
-// Will be called when WiFi station was connected to AP
-void connectOk()
-{
-	debugf("I'm CONNECTED");
-	Serial.println(WifiStation.getIP().toString());
-}
-
-// Will be called when WiFi station timeout was reached
-void connectFail()
-{
-	debugf("I'm NOT CONNECTED!");
-	WifiStation.waitConnection(connectOk, 10, connectFail); // Repeat and check again
-}
-
-FTPServer ftp;
-HttpServer server;
 String network, password;
 Timer connectionTimer;
-
-
-void startFTP()
-{
-	//if (!fileExist("index.html"))
-	//	fileSetContent("index.html", "<h3>Please connect to FTP and upload files from folder 'web/build' (details in code)</h3>");
-
-	// Start FTP server
-	ftp.listen(21);
-	ftp.addUser("me", "123"); // FTP account
-}
 
 void onIndex(HttpRequest &request, HttpResponse &response)
 {
@@ -163,6 +133,7 @@ void onAjaxNetworkList(HttpRequest &request, HttpResponse &response)
 	response.setAllowCrossDomainOrigin("*");
 	response.sendJsonObject(stream);
 }
+
 void makeConnection()
 {
 	WifiStation.enable(true);
@@ -174,6 +145,7 @@ void makeConnection()
 
 	network = ""; // task completed
 }
+
 void onAjaxConnect(HttpRequest &request, HttpResponse &response)
 {
 	JsonObjectStream* stream = new JsonObjectStream();
@@ -216,18 +188,6 @@ void onAjaxConnect(HttpRequest &request, HttpResponse &response)
 	response.sendJsonObject(stream);
 }
 
-//const char* names[] = { "sensor_0", "sensor_1", "sensor_2", "sensor_3", "sensor_4", "sensor_5" };
-void onApiSensors(HttpRequest &request, HttpResponse &response)
-{
-	JsonObjectStream* stream = new JsonObjectStream();
-	JsonObject& json = stream->getRoot();
-	json["status"] = (bool)true;
-	json["millis"] = millis();
-	json["heap"] = system_get_free_heap_size();
-	JsonObject& sensors = json.createNestedObject("sensors");
-	response.sendJsonObject(stream);
-}
-
 void startWebServer()
 {
 	server.listen(80);
@@ -235,79 +195,66 @@ void startWebServer()
 	server.addPath("/ipconfig", onIpConfig);
 	server.addPath("/ajax/get-networks", onAjaxNetworkList);
 	server.addPath("/ajax/connect", onAjaxConnect);
-	server.addPath("/sensors", onApiSensors);
 	server.setDefaultHandler(onFile);
 }
 
+void startFTP()
+{
+	if (!fileExist("index.html"))
+		fileSetContent("index.html", "<h3>Please connect to FTP and upload files from folder 'web/build' (details in code)</h3>");
+
+	// Start FTP server
+	ftp.listen(21);
+	ftp.addUser("me", "123"); // FTP account
+}
 
 // Will be called when system initialization was completed
 void startServers()
 {
 	startFTP();
 	startWebServer();
-	GetSSIDList();
 }
 
-
+void networkScanCompleted(bool succeeded, BssList list)
+{
+	if (succeeded)
+	{
+		for (int i = 0; i < list.count(); i++)
+			if (!list[i].hidden && list[i].ssid.length() > 0)
+				networks.add(list[i]);
+	}
+	networks.sort([](const BssInfo& a, const BssInfo& b){ return b.rssi - a.rssi; } );
+}
 Timer rf_Rx;
+Timer rf_RxProcess;
 void init()
 {
 	spiffs_mount(); // Mount file system, in order to work with files
-	//Define the aggressive and conservative Tuning Parameters
-	if (!AppSettings.exist())
-	{
-		Serial.println("Created Appsettings");
 
-		AppSettings.ssid = WIFI_SSID;
-		AppSettings.password = WIFI_PASS;
-		AppSettings.save();
-	}
-	Serial.print("Loading Appsettings...");
+	Serial.begin(SERIAL_BAUD_RATE); // 115200 by default
+	system_update_cpu_freq(SYS_CPU_160MHZ);
+	Serial.systemDebugOutput(true); // Enable debug output to serial
 	AppSettings.load();
-	Serial.println("done");
-	Serial.print("Main SSID: ");
-	Serial.println(AppSettings.ssid);
-	Serial.print("Main password: ");
-		Serial.println(AppSettings.password);
-	char buffer[30];
-	   sprintf(buffer, "with %%p:  x    = %p\n", AppSettings);
-	   Serial.print(buffer);
-	//initialize the variables we're linked to
 
-    Serial.systemDebugOutput(false); // Enable debug output to serial
-
-    // Soft access point
-	WifiAccessPoint.enable(true);
-	WifiAccessPoint.config("RfTranseiver", "", AUTH_OPEN);
-
-	// Station - WiFi client
 	WifiStation.enable(true);
+
 	if (AppSettings.exist())
 	{
 		WifiStation.config(AppSettings.ssid, AppSettings.password);
-		Serial.println("Found appsettings");
 		if (!AppSettings.dhcp && !AppSettings.ip.isNull())
-		{
 			WifiStation.setIP(AppSettings.ip, AppSettings.netmask, AppSettings.gateway);
-			Serial.println("Using static ip");
-		}
 	}
-	//WifiStation.config(WIFI_SSID, WIFI_PWD); // Put you SSID and Password here
 
-	// Optional: Change IP addresses (and disable DHCP)
-	//WifiAccessPoint.setIP(IPAddress(192, 168, 2, 1));
-	//WifiStation.setIP(IPAddress(192, 168, 1, 171));
+	WifiStation.startScan(networkScanCompleted);
 
-
-	// Print available access points
-	//WifiStation.startScan(listNetworks); // In Sming we can start network scan from init method without additional code
-
-	// Run our method when station was connected to AP (or not connected)
-	WifiStation.waitConnection(connectOk, 30, connectFail); // We recommend 20+ seconds at start
+	// Start AP for configuration
+	WifiAccessPoint.enable(true);
+	WifiAccessPoint.config("Sming Configuration", "", AUTH_OPEN);
 
 	// Run WEB server on system ready
 	System.onReady(startServers);
-
-	rf_Rx.initializeMs(10, runRx).start();
+	//rf_Rx.initializeMs(1000, runRx).start();
+	runRx();
+	rf.start(100);
 
 }

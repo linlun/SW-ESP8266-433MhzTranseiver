@@ -13,13 +13,10 @@
 //IR_MAX_PULSE_WIDTH=4000UL
 //IR_MIN_STARTPULSE_WIDTH=10000UL
 
-
-#define WIFI_SSID  "Linuxz"
-#define WIFI_PASS  "asdfghjkl"
-
 #define IR_MIN_PULSE_WIDTH		120
-#define IR_MAX_PULSE_WIDTH		12000
-#define MAX_NR_TIMES	200
+#define IR_MAX_PULSE_WIDTH		8000
+//#define IR_MAX_PULSE_WIDTH		12000
+#define MAX_NR_TIMES	512
 // This may need to be changed if new protocols are introduced which have a lower number of pulses
 #define MIN_NUM_PULSES	80
 

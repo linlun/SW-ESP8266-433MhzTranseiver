@@ -14,13 +14,13 @@
 uint8 receiverBufferLong[14];
 #endif
 
-
-int8 parseProtocol(const uint16 *buf, uint8 len, uint8 index, Ir_Protocol_Data_t *proto) {
+int8 parseProtocol(const uint16 *buf, uint16 len, uint16 index, Ir_Protocol_Data_t *proto,uint16 *used_len) {
 	uint8 res;
 	proto->protocol=IR_PROTO_UNKNOWN;
 	proto->data=0;
 	proto->timeout=1;
 	/* Try all protocols in order. */
+	/*
 #if (IR_PROTOCOLS_USE_SIRC)
 	if (parseSIRC(buf, len, proto)==IR_OK) return IR_OK;
 #endif
@@ -48,12 +48,13 @@ int8 parseProtocol(const uint16 *buf, uint8 len, uint8 index, Ir_Protocol_Data_t
 #if (IR_PROTOCOLS_USE_IROBOT)
 	if (parseiRobot(buf, len, proto)==IR_OK) return IR_OK;
 #endif
-
+*/
 
 /* RF protocols needs index parameter */
 #if (IR_PROTOCOLS_USE_NEXA2)
-	if (parseNexa2(buf, len, index, proto)==IR_OK) return IR_OK;
+	if (parseNexa2(buf, len, index, proto, used_len)==IR_OK) return IR_OK;
 #endif
+/*
 #if (IR_PROTOCOLS_USE_NEXA1)
 	if (parseNexa1(buf, len, index, proto)==IR_OK) return IR_OK;
 #endif
@@ -71,16 +72,18 @@ int8 parseProtocol(const uint16 *buf, uint8 len, uint8 index, Ir_Protocol_Data_t
 	res = parseRubicson(buf, len, index, proto);
 	if (res!=IR_NOT_CORRECT_DATA) return res;
 #endif
+*/
 #if (IR_PROTOCOLS_USE_RUBICSONSTN)
-	res = parseRubicsonStn(buf, len, index, proto);
+	res = parseRubicsonStn(buf, len, index, proto, used_len);
 	if (res!=IR_NOT_CORRECT_DATA) return res;
 #endif
+/*
 #if (IR_PROTOCOLS_USE_OREGON)
 
 	res = parseOregon(buf, len, index, proto);
 	if (res!=IR_NOT_CORRECT_DATA) return res;
 #endif
-
+*/
 	/* No protocol matched. */
 	proto->protocol = IR_PROTO_UNKNOWN;
 	return IR_NOT_CORRECT_DATA;
@@ -1149,70 +1152,92 @@ int8 expandiRobot(uint16 *buf, uint8 *len, Ir_Protocol_Data_t *proto) {
  * @return
  * 		IR_OK if data parsed successfully, one of several errormessages if not
  */
+#define INCREMENT(nr, maxValue) ((nr)==((maxValue)-1)?(0):((nr)+1))
+#define DECREMENT(nr, maxValue) ((nr)==(0)?((maxValue)-1):((nr)-1))
+#define INDEX_ADD(value, add, max)	((((value) + (add))<=(max))?((value) + (add)):((value) + (add) - (max)))
+#define INDEX_SUBTRACT(value, sub, max)	((((value) - (sub))> 0)?((value) - (sub)):((value) - (sub) + (max)))
 
-int8 parseNexa2(const uint16 *buf, uint8 len, uint8 index, Ir_Protocol_Data_t *proto)
+
+int8 parseNexa2(const uint16 *buf, uint16 len, uint16 index, Ir_Protocol_Data_t *proto,uint16 *used_len)
 {
 	/* check if we have correct amount of data */ 
-	if (len < 132) {
+	if (len < 131) {
 		return IR_NOT_CORRECT_DATA;
 	}
 	//Serial.print(((pulsewidth >> 8) & 0xFF), 0);
 	//Serial.print(pulsewidth & 0xFF, 0);
 
 	//Serial.println("Nexa");
-	uint8 i;
-	i=index-132;
+	uint16 i;
+	i=index;
+	/*
 	if (i>index)
 		i+=MAX_NR_TIMES;
 	if ((buf[i] < IR_NEXA2_START1 - IR_NEXA2_START1/IR_NEXA2_TOL_DIV) || (buf[i] > IR_NEXA2_START1 + IR_NEXA2_START1/IR_NEXA2_TOL_DIV)) { //check start bit
 		//Serial.println("1");
 		return IR_NOT_CORRECT_DATA;
-
 	}
-	i=index-131;
-	if (i>index)
-		i+=MAX_NR_TIMES;
+	*/
+	//i=INCREMENT(i,MAX_NR_TIMES);
 	if ((buf[i] < IR_NEXA2_HIGH - IR_NEXA2_HIGH/IR_NEXA2_TOL_DIV) || (buf[i] > IR_NEXA2_HIGH + IR_NEXA2_HIGH/IR_NEXA2_TOL_DIV)) { //check start bit
-		Serial.println("2");
+		//Serial.println("2");
 		return IR_NOT_CORRECT_DATA;
 	}
-	i=index-130;
-	if (i>index)
-		i+=MAX_NR_TIMES;
+	i=INCREMENT(i,MAX_NR_TIMES);
 	if ((buf[i] < IR_NEXA2_START2 - IR_NEXA2_START2/IR_NEXA2_TOL_DIV) || (buf[i] > IR_NEXA2_START2 + IR_NEXA2_START2/IR_NEXA2_TOL_DIV)) { //check start bit
-		Serial.println("3");
+		//Serial.println("3");
 		return IR_NOT_CORRECT_DATA;
 	}
+	i=INCREMENT(i,MAX_NR_TIMES);
 
 	/* Incoming data could actually be longer than 32bits when a dimming command is received */
 	uint64 rawbitsTemp = 0;
+	uint64 bitCounterValue = 1;
+	uint8 bitCounterAll = 0;
 	uint8 bitCounter = 0;
 	uint8 i2;
-	for (i = 3; i < 132; i++) {
-		i2=index-(132-i);
-		if (i2>index)
-			i2+=MAX_NR_TIMES;
-		if ((i&1) == 0) {		/* if even, data */
-			/* check length of transmit pulse */
-			if ((buf[i2] > IR_NEXA2_LOW_ONE - IR_NEXA2_LOW_ONE/IR_NEXA2_TOL_DIV) && (buf[i2] < IR_NEXA2_LOW_ONE + IR_NEXA2_LOW_ONE/IR_NEXA2_TOL_DIV)) {
-				/* write a one */
-				rawbitsTemp |= (1UL)<<(bitCounter++);
-			} else if ((buf[i2] > IR_NEXA2_LOW_ZERO - IR_NEXA2_LOW_ZERO/IR_NEXA2_TOL_DIV) && (buf[i2] < IR_NEXA2_LOW_ZERO + IR_NEXA2_LOW_ZERO/IR_NEXA2_TOL_DIV)) {
-				/* do nothing, a zero is already in rawbits */
+	for (i2 = 0; i2 < 129; i2++) {
+		i=INCREMENT(i,MAX_NR_TIMES);
+		if ((i2&1) == 0) {		/* if even, data */
+			if ((bitCounterAll&1) == 0)
+			{
+				/* check length of transmit pulse */
+				if ((buf[i] > IR_NEXA2_LOW_ONE - IR_NEXA2_LOW_ONE/IR_NEXA2_TOL_DIV) && (buf[i] < IR_NEXA2_LOW_ONE + IR_NEXA2_LOW_ONE/IR_NEXA2_TOL_DIV)) {
+					/* write a one */
+					//rawbitsTemp |= ((uint32)(1))<<(bitCounter);
+					rawbitsTemp += bitCounterValue;
+					//Serial.print("1");
+				} else if ((buf[i] > IR_NEXA2_LOW_ZERO - IR_NEXA2_LOW_ZERO/IR_NEXA2_TOL_DIV) && (buf[i] < IR_NEXA2_LOW_ZERO + IR_NEXA2_LOW_ZERO/IR_NEXA2_TOL_DIV)) {
+					/* do nothing, a zero is already in rawbits */
+
+					//Serial.print("0");
+				} else {
+					/*
+					Serial.print("4 ");
+					Serial.print(bitCounter);
+					Serial.print(" ");
+					Serial.println(i);
+					Serial.print(" ");
+					Serial.println(buf[i]);
+					*/
+					return IR_NOT_CORRECT_DATA;
+				}
+				bitCounterValue = bitCounterValue + bitCounterValue;
 				bitCounter++;
-			} else {
-				Serial.print("4 ");
+			}
+			bitCounterAll++;
+			//i=INCREMENT(i,MAX_NR_TIMES);
+			//i=INCREMENT(i,MAX_NR_TIMES);
+			//i+=2; 	// skip every other bit, implement check here in the future
+		} else {			/* if odd, no data */
+			if ((buf[i] < IR_NEXA2_HIGH - IR_NEXA2_HIGH/IR_NEXA2_TOL_DIV) || (buf[i] > IR_NEXA2_HIGH + IR_NEXA2_HIGH/IR_NEXA2_TOL_DIV)) {
+				/*Serial.println("5");
 				Serial.print(bitCounter);
 				Serial.print(" ");
 				Serial.println(i);
 				Serial.print(" ");
-				Serial.println(buf[i2]);
-				return IR_NOT_CORRECT_DATA;
-			}
-			i+=2; 	// skip every other bit, implement check here in the future
-		} else {			/* if odd, no data */
-			if ((buf[i2] < IR_NEXA2_HIGH - IR_NEXA2_HIGH/IR_NEXA2_TOL_DIV) || (buf[i2] > IR_NEXA2_HIGH + IR_NEXA2_HIGH/IR_NEXA2_TOL_DIV)) {
-				Serial.println("5");
+				Serial.println(buf[i]);
+				*/
 				return IR_NOT_CORRECT_DATA;
 			}
 		}
@@ -1221,6 +1246,7 @@ int8 parseNexa2(const uint16 *buf, uint8 len, uint8 index, Ir_Protocol_Data_t *p
 	proto->protocol=IR_PROTOCOL_NEXA2;
 	proto->timeout=IR_NEXA2_TIMEOUT;
 	proto->data=rawbitsTemp;
+	*used_len = 131u;
 	return IR_OK;
 }
 #endif
@@ -2266,70 +2292,69 @@ int8 parseOregon(const uint16 *buf, uint8 len, uint8 index, Ir_Protocol_Data_t *
  * @param proto
  * 		Pointer to protocol information
  * @return
- * 		IR_OK if data parsed successfully, one of several errormessages if not
+ * 		IR_OK if data parsed successfully, one of several error messages if not
  */
 
-int8 parseRubicsonStn(const uint16 *buf, uint8 len, uint8 index, Ir_Protocol_Data_t *proto)
+int8 parseRubicsonStn(const uint16 *buf, uint16 len, uint16 index, Ir_Protocol_Data_t *proto,uint16 *used_len)
 {
 	/* check if we have correct amount of data */ 
 	if (len < 224) {
 		return IR_NOT_CORRECT_DATA;
 	}
-	uint8 i, i2, bitIndex, byteIndex;
+	Serial.print("s");
+	uint8 bitIndex, byteIndex;
+
 	//uint64 rawbitsTemp = 0;//0xffffffffffffffff;
 	//receiverBufferLong[14];
 
-	
 	/* Check start bit condition */
-	i2=index-224;
-	if (i2>index)
-		i2+=MAX_NR_TIMES;
+	uint16 i,i2;
+	i=index;
+	if (i>index)
+		i+=MAX_NR_TIMES;
 
 	proto->data=i2;		/*Store startindex for debug output */
 	
-	if ((buf[i2] < IR_RUBICSONSTN_LOW_START - IR_RUBICSONSTN_LOW_START/IR_RUBICSONSTN_TOL_DIV) || (buf[i2] > IR_RUBICSONSTN_LOW_START + IR_RUBICSONSTN_LOW_START/IR_RUBICSONSTN_TOL_DIV)) 
+	if ((buf[i] < IR_RUBICSONSTN_LOW_START - IR_RUBICSONSTN_LOW_START/IR_RUBICSONSTN_TOL_DIV) || (buf[i] > IR_RUBICSONSTN_LOW_START + IR_RUBICSONSTN_LOW_START/IR_RUBICSONSTN_TOL_DIV))
 	{
+		Serial.print("x");
 	  return IR_NOT_CORRECT_DATA;
-		
 	}
+	i=INCREMENT(i,MAX_NR_TIMES);
 	byteIndex = 0;
 	bitIndex = 0;
-	for (i = 223; i > 0; i--)
+	for (i2 = 0; i2 <= 223; i2++)
 	{
-		i2=index-i;
-		if (i2>index)
-			i2+=MAX_NR_TIMES;
-
-		/* Check if correct amount of data have been received */
-		//if ((i == 78) && (rawbitsTemp != 0b00001))
-		//	return IR_NOT_CORRECT_DATA;
-
-		if ((i&1) != 0) 
+		if ((i2&1) == 0)
 		{		/* if odd, no data */
-			if ((buf[i2] < IR_RUBICSONSTN_HIGH - IR_RUBICSONSTN_HIGH/IR_RUBICSONSTN_TOL_DIV) || (buf[i2] > IR_RUBICSONSTN_HIGH + IR_RUBICSONSTN_HIGH/IR_RUBICSONSTN_TOL_DIV)) 
+			if ((buf[i] < IR_RUBICSONSTN_HIGH - IR_RUBICSONSTN_HIGH/IR_RUBICSONSTN_TOL_DIV) || (buf[i] > IR_RUBICSONSTN_HIGH + IR_RUBICSONSTN_HIGH/IR_RUBICSONSTN_TOL_DIV))
 			{
-	return IR_NOT_CORRECT_DATA;
+				Serial.print("y");
+				return IR_NOT_CORRECT_DATA;
 			}
 		} 
 		else
-		{			/* if even, data */
+		{	/* if even, data */
 			/* check length of transmit pulse */
-			if ((buf[i2] > IR_RUBICSONSTN_LOW_ONE - IR_RUBICSONSTN_LOW_ONE/IR_RUBICSONSTN_TOL_DIV) && (buf[i2] < IR_RUBICSONSTN_LOW_ONE + IR_RUBICSONSTN_LOW_ONE/IR_RUBICSONSTN_TOL_DIV)) 
+			if ((buf[i] > IR_RUBICSONSTN_LOW_ONE - IR_RUBICSONSTN_LOW_ONE/IR_RUBICSONSTN_TOL_DIV) && (buf[i] < IR_RUBICSONSTN_LOW_ONE + IR_RUBICSONSTN_LOW_ONE/IR_RUBICSONSTN_TOL_DIV))
 			{
+				Serial.print("1");
 				/* write a one */
 				receiverBufferLong[byteIndex] = receiverBufferLong[byteIndex]<<1;
 				receiverBufferLong[byteIndex] |= 1;
 				bitIndex++;
 			}
-			else if ((buf[i2] > IR_RUBICSONSTN_LOW_ZERO - IR_RUBICSONSTN_LOW_ZERO/IR_RUBICSONSTN_TOL_DIV) && (buf[i2] < IR_RUBICSONSTN_LOW_ZERO + IR_RUBICSONSTN_LOW_ZERO/IR_RUBICSONSTN_TOL_DIV)) 
+			else if ((buf[i] > IR_RUBICSONSTN_LOW_ZERO - IR_RUBICSONSTN_LOW_ZERO/IR_RUBICSONSTN_TOL_DIV) && (buf[i] < IR_RUBICSONSTN_LOW_ZERO + IR_RUBICSONSTN_LOW_ZERO/IR_RUBICSONSTN_TOL_DIV))
 			{
+				Serial.print("0");
 				/* do nothing, a zero is already in rawbits */
 				receiverBufferLong[byteIndex] = receiverBufferLong[byteIndex]<<1;
 				bitIndex++;
 			}
 			else 
 			{
-	return IR_NOT_CORRECT_DATA;
+				Serial.print("z");
+				return IR_NOT_CORRECT_DATA;
 			}
 			if (bitIndex == 8)
 			{
@@ -2337,16 +2362,16 @@ int8 parseRubicsonStn(const uint16 *buf, uint8 len, uint8 index, Ir_Protocol_Dat
 			  bitIndex=0;
 			}
 		}
+		i=INCREMENT(i,MAX_NR_TIMES);
 	}
-	
+	Serial.println("");
 	//rawbitsTemp = ~rawbitsTemp;
 	//rawbitsTemp = rawbitsTemp&0xFFFFFFFFFF;
 	
 	proto->protocol=IR_PROTOCOL_RUBICSONSTN;
 	proto->timeout=IR_RUBICSONSTN_TIMEOUT;
 	proto->data=0u;
-	
+	*used_len = 224u;
 	return IR_OK_LONG;
-
 }
 #endif

@@ -144,7 +144,7 @@ int8 parseiRobot(const uint16 *buf, uint8 len, Ir_Protocol_Data_t *proto);
 
 /* RF protocols needs index parameter */
 #if (IR_PROTOCOLS_USE_NEXA2)
-int8 parseNexa2(const uint16 *buf, uint8 len, uint8 index, Ir_Protocol_Data_t *proto);
+int8 parseNexa2(const uint16 *buf, uint16 len, uint16 index, Ir_Protocol_Data_t *proto,uint16 *used_len);
 #endif
 #if (IR_PROTOCOLS_USE_NEXA1)
 int8 parseNexa1(const uint16 *buf, uint8 len, uint8 index, Ir_Protocol_Data_t *proto);
@@ -168,12 +168,13 @@ int8 parseOregon(const uint16 *buf, uint8 len, uint8 index, Ir_Protocol_Data_t *
 #if (IR_PROTOCOLS_USE_RUBICSONSTN)
 
 extern uint8 receiverBufferLong[14];
-int8 parseRubicsonStn(const uint16 *buf, uint8 len, uint8 index, Ir_Protocol_Data_t *proto);
+int8 parseRubicsonStn(const uint16 *buf, uint16 len, uint16 index, Ir_Protocol_Data_t *proto,uint16 *used_len);
 #endif
 
 
 /* Try to parse all above protocols until a match is found. */
-int8 parseProtocol(const uint16 *buf, uint8 len, uint8 index, Ir_Protocol_Data_t *proto);
+//int8 parseProtocol(const uint16 *buf, uint8 len, uint8 index, Ir_Protocol_Data_t *proto);
+int8 parseProtocol(const uint16 *buf, uint16 len, uint16 index, Ir_Protocol_Data_t *proto,uint16 *used_len);
 /* The Hash protocol always succeeds and creates a one-way signature of the
  * pulse times buffer that is supposed to be unique and constant for a specific
  * IR event. It may be used to send a valid event even if the protocol hasn't
@@ -366,8 +367,8 @@ int8 expandProtocol(uint16 *buf, uint8 *len, Ir_Protocol_Data_t *proto);
  */
 #define IR_NEXA2_START1 	(10000)	//us
 #define IR_NEXA2_START2 	(2500)	//us
-#define IR_NEXA2_HIGH 		(320)		//us
-#define IR_NEXA2_LOW_ONE	(210)		//us
+#define IR_NEXA2_HIGH 		(210)		//us
+#define IR_NEXA2_LOW_ONE	(320)		//us
 #define IR_NEXA2_LOW_ZERO	(1200)	//us
 #define IR_NEXA2_TIMEOUT	(200)								//ms	(time between ir frames)
 #define IR_NEXA2_REPS		(5)									//		(minimum number of times to repeat code)
