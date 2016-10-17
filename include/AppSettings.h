@@ -43,13 +43,13 @@ struct ApplicationSettingsStorage
 	uint32 mqtt_period = 1800;
 	uint32 mqtt_port = MQTT_PORT;
 
-	String mqtt_nodeName = "Lunch";
+	String mqtt_nodeName = "RfNode";
 
 	//String ota_ROM_0 = "https://hok.famlundin.org:443/SW/SW-ESP8266_Lunch/rom0.bin";
 	//String ota_SPIFFS = "https://hok.famlundin.org:443/SW/SW-ESP8266_Lunch/spiff_rom.bin";
 
-	String ota_ROM_0 = "http://192.168.1.128:80/SW/SW-ESP8266_Lunch/rom0.bin";
-	String ota_SPIFFS = "http://192.168.1.128:80/SW/SW-ESP8266_Lunch/spiff_rom.bin";
+	String ota_ROM_0 = "http://192.168.1.128:80/SW/SW-ESP8266_RF/rom0.bin";
+	String ota_SPIFFS = "http://192.168.1.128:80/SW/SW-ESP8266_RF/spiff_rom.bin";
 
 	void load()
 	{

@@ -410,6 +410,7 @@ void onAjaxNetworkList(HttpRequest &request, HttpResponse &response)
 
 	response.setAllowCrossDomainOrigin("*");
 	response.sendJsonObject(stream);
+	delete stream;
 }
 void onAjaxRunOta(HttpRequest &request, HttpResponse &response)
 {
@@ -467,6 +468,7 @@ void onAjaxConnect(HttpRequest &request, HttpResponse &response)
 
 	response.setAllowCrossDomainOrigin("*");
 	response.sendJsonObject(stream);
+	delete stream;
 }
 
 void startWebServer()
@@ -522,94 +524,173 @@ void process()
 {
 	// Receive loop, if data received by RF433 send it by MQTT to MQTTsubject
 	  if (mySwitch.available()) {
-	    // Topic on which we will send data
-	    trc("Receiving 433Mhz signal");
-	    String MQTTsubject = "home/433toMQTT_rx";
-	    unsigned long MQTTvalue;
-	    MQTTvalue=mySwitch.getReceivedValue();
-	    long debug = mySwitch.getReceivedDelay();
-	    long debug2 = mySwitch.getReceivedBitlength();
-	    long debug3 = mySwitch.getReceivedProtocol();
-	    unsigned int* times = mySwitch.getReceivedRawdata();
-	    uint8* times2 = mySwitch.getReceivedLongdata();
-	    trc2("RAW: "+String(MQTTvalue)+" : "+String(debug)+" : "+String(debug2)+" : "+String(debug3)+"\r\n");
-	    if (debug3 ==5)
-	    {
-	      /*
-	      uint64 data = (uint64)times2[0] + ((uint64)times2[1]<<8) + ((uint64)times2[2]<<16) + ((uint64)times2[3]<<24) + ((uint64)times2[4]<<32) + ((uint64)times2[5]<<40);
-	      trc2("data2:\r\n");
-	      trcu64(data);
-	             data = (uint64)times2[6] + ((uint64)times2[7]<<8) + ((uint64)times2[8]<<16) + ((uint64)times2[9]<<24) + ((uint64)times2[10]<<32) + ((uint64)times2[11]<<40);
-	      trc2("data3:\r\n");
-	      trcu64(data);
-	      */
+		Serial.print(mySwitch.getReceivedProtocol());
+		trc2("-");
+		Serial.print((uint32_t)mySwitch.getReceivedValue());
+		trc2("\n");
+		Serial.printf("Free Heap: %d\r\n", system_get_free_heap_size());
+		JsonObjectStream* stream = new JsonObjectStream();
+		JsonObject& json = stream->getRoot();
+		if (mySwitch.getReceivedJSON(json))
+		{
+			String button;
+			String value;
+			String rootString;
+			json.printTo(rootString);
+			trc2(rootString);
+			uint32 id;
 
-	      for (int j = 0 ; j < 12 ; j++)
-	      {
-	        Serial.print(times2[j], HEX);
-	        Serial.print(" ");
-	      }
-	      Serial.println("");
-	/*
-	              aaaaaaaa 0dddsttt tttttttt hhhhhhhh wwwwwwww wwwwwwww
-	            0b11111001 11111001 00001100 10110010 11100011 01101111
-	      a = address = winddirection, s = sign, t = temperature, h = humidity, w = vindspeed
-	      */
-	      float windspeed_avg = (times2[4] & 0xFF)*0.8f;
-	      float windspeed_max = (times2[5] & 0xFF)*0.8f;
-	      //var crc = data&0xFF;
-	      uint8 humidity = times2[3]&0xFF;
-	      sint16 temp = ((times2[1]&0x0F)<<8) + times2[2];
-	      float winddirection = (((times2[1])>>4)&0x7)*360.0f/8;
-	      uint8 addr = times2[0];
-	      uint8 sign = (temp>>11)&1;
-	      if (sign > 0)
-	      {
-	        temp = temp^0xFFF;
-	        temp += 1;
-	        temp = -temp;
-	      }
-	      float temp2 = temp/10.0f;
-	      /*
-	            aaaaaaaa 1------- -------b rrrrrrrr rrrrrrrr rrrrrrrr
-	          0b11111001 11111001 00001100 10110010 11100011 01101111
-	      a = address b = battery empty, r = rain
-	      */
-	      uint8 battery = times2[8] & 0x1;
-	      //var crc = data&0xFF;
-	      float rain = 0.4f*((times2[9]*65536)+(times2[10]*256)+(times2[11]));
+			uint8 sw;
+			uint8 grp;
+			uint8 btn;
+			uint8 dim;
+			switch ((uint8)json["protocol"])
+			{
+			case IR_PROTOCOL_NEXA2:
 
-	      Serial.print("Wind avg: ");
-	      Serial.print(windspeed_avg);
-	      Serial.println("m/s");
-	            Serial.print("Wind max: ");
-	      Serial.print(windspeed_max);
-	      Serial.println("m/s");
-	            Serial.print("Temp:     ");
-	      Serial.print(temp2);
-	      Serial.println("c");
-	            Serial.print("Humidity: ");
-	      Serial.print(humidity);
-	      Serial.println("%");
-	            Serial.print("Wind dir: ");
-	      Serial.print(winddirection);
-	      Serial.println("deg");
-	            Serial.print("Rain:     ");
-	      Serial.print(rain);
-	      Serial.println("mm");
-	            Serial.print("Battery:  ");
-	      Serial.print(battery);
-	      Serial.println("");
-	    }
+				if (json["group"] == 0 )
+				{
+					button = "/Btn"+String((uint8)json["button"]);
+				} else
+				{
+					button = "/Group";
+				}
+				if (json["dim"] != 0 )
+				{
+					value = "Lvl"+String((uint8)json["dim"]);
+				} else
+				{
+					if (json["switch"] == 1)
+					{
+						value = "ON";
+					} else {
+						value = "OFF";
+					}
+				}
+				mqtt->publish(mqtt_client + "/Nexa_" + String((uint32)json["id"]) + button  , value); // or publishWithQoS
+				trc2("nexa2\n");
+				break;
+			case IR_PROTOCOL_RUBICSONSTN:
+				trc2("Rubicson Station\n");
+				mqtt->publish(mqtt_client + "/RubSta_" + String((uint32)json["address"]) + "/temperature"  , String((float)json["temperature"])); // or publishWithQoS
+				mqtt->publish(mqtt_client + "/RubSta_" + String((uint32)json["address"]) + "/humidity"  , String((float)json["humidity"])); // or publishWithQoS
+				mqtt->publish(mqtt_client + "/RubSta_" + String((uint32)json["address"]) + "/rain"  , String((float)json["rain"])); // or publishWithQoS
+				mqtt->publish(mqtt_client + "/RubSta_" + String((uint32)json["address"]) + "/windspeed"  , String((float)json["avgWind"])); // or publishWithQoS"
+				mqtt->publish(mqtt_client + "/RubSta_" + String((uint32)json["address"]) + "/windspeed_peak"  , String((float)json["maxWind"])); // or publishWithQoS"
+				mqtt->publish(mqtt_client + "/RubSta_" + String((uint32)json["address"]) + "/winddirection"  , String((float)json["direction"])); // or publishWithQoS"
+				mqtt->publish(mqtt_client + "/RubSta_" + String((uint32)json["address"]) + "/battery"  , String((float)json["battery"])); // or publishWithQoS
 
-	    if (MQTTvalue < 250 && MQTTvalue > 220)
-	    {
-	      for (int i = 0; i <=  MQTTvalue+2; i++)
-	      {
-	        trc2(String(times[i])+" ");
-	      }
-	      trc2("\r\n");
-	    }
+
+				//json["avgWind"] = windspeed_avg;
+				//json["maxWind"] = windspeed_max;
+				//json["direction"] = winddirection;
+				//json["temperature"] = temp2;
+				//json["humidity"] = humidity;
+				//json["rain"] = rain;
+				//json["battery"] = battery;
+				break;
+			case IR_PROTOCOL_RUBICSON:
+				trc2("Rubicson\n");
+				mqtt->publish(mqtt_client + "/Rubicson_" + String((uint32)json["address"]) + "/temperature"  , String((float)json["temperature"])); // or publishWithQoS
+
+				//json["temperature"] = temp2;
+				//json["humidity"] = humidity;
+				//json["crc"] = crc;
+				//json["address"] = addr;
+				break;
+			case IR_PROTOCOL_VIKINGSTEAK:
+				trc2("Viking Stektermometer\n");
+				mqtt->publish(mqtt_client + "/Viking_" + String((uint32)json["address"]) + "/temperature"  , String((float)json["temperature"])); // or publishWithQoS
+
+				//json["temperature"] = temp2;
+				//json["address"] = addr;
+				break;
+			default:
+				break;
+
+			}
+
+		}
+		delete stream;
+//	    // Topic on which we will send data
+//	    trc("Receiving 433Mhz signal");
+//	    String MQTTsubject = "home/433toMQTT_rx";
+//	    unsigned long MQTTvalue;
+//	    MQTTvalue=mySwitch.getReceivedValue();
+//	    long debug = mySwitch.getReceivedDelay();
+//	    long debug2 = mySwitch.getReceivedBitlength();
+//	    long debug3 = mySwitch.getReceivedProtocol();
+//	    unsigned int* times = mySwitch.getReceivedRawdata();
+//	    uint8* times2 = mySwitch.getReceivedLongdata();
+//	    trc2("RAW: "+String(MQTTvalue)+" : "+String(debug)+" : "+String(debug2)+" : "+String(debug3)+"\r\n");
+//	    if (debug3 ==5)
+//	    {
+//	      for (int j = 0 ; j < 12 ; j++)
+//	      {
+//	        Serial.print(times2[j], HEX);
+//	        Serial.print(" ");
+//	      }
+//	      Serial.println("");
+//	/*
+//	              aaaaaaaa 0dddsttt tttttttt hhhhhhhh wwwwwwww wwwwwwww
+//	            0b11111001 11111001 00001100 10110010 11100011 01101111
+//	      a = address = winddirection, s = sign, t = temperature, h = humidity, w = vindspeed
+//	      */
+//	      float windspeed_avg = (times2[4] & 0xFF)*0.8f;
+//	      float windspeed_max = (times2[5] & 0xFF)*0.8f;
+//	      //var crc = data&0xFF;
+//	      uint8 humidity = times2[3]&0xFF;
+//	      sint16 temp = ((times2[1]&0x0F)<<8) + times2[2];
+//	      float winddirection = (((times2[1])>>4)&0x7)*360.0f/8;
+//	      uint8 addr = times2[0];
+//	      uint8 sign = (temp>>11)&1;
+//	      if (sign > 0)
+//	      {
+//	        temp = temp^0xFFF;
+//	        temp += 1;
+//	        temp = -temp;
+//	      }
+//	      float temp2 = temp/10.0f;
+//	      /*
+//	            aaaaaaaa 1------- -------b rrrrrrrr rrrrrrrr rrrrrrrr
+//	          0b11111001 11111001 00001100 10110010 11100011 01101111
+//	      a = address b = battery empty, r = rain
+//	      */
+//	      uint8 battery = times2[8] & 0x1;
+//	      //var crc = data&0xFF;
+//	      float rain = 0.4f*((times2[9]*65536)+(times2[10]*256)+(times2[11]));
+//
+//	      Serial.print("Wind avg: ");
+//	      Serial.print(windspeed_avg);
+//	      Serial.println("m/s");
+//	            Serial.print("Wind max: ");
+//	      Serial.print(windspeed_max);
+//	      Serial.println("m/s");
+//	            Serial.print("Temp:     ");
+//	      Serial.print(temp2);
+//	      Serial.println("c");
+//	            Serial.print("Humidity: ");
+//	      Serial.print(humidity);
+//	      Serial.println("%");
+//	            Serial.print("Wind dir: ");
+//	      Serial.print(winddirection);
+//	      Serial.println("deg");
+//	            Serial.print("Rain:     ");
+//	      Serial.print(rain);
+//	      Serial.println("mm");
+//	            Serial.print("Battery:  ");
+//	      Serial.print(battery);
+//	      Serial.println("");
+//	    }
+//
+//	    if (MQTTvalue < 65 && MQTTvalue > 75)
+//	    {
+//	      for (int i = 0; i <=  MQTTvalue+2; i++)
+//	      {
+//	        trc2(String(times[i])+" ");
+//	      }
+//	      trc2("\r\n");
+//	    }
 
 	    mySwitch.resetAvailable();
 	    /*
@@ -633,7 +714,7 @@ void init() {
 
 
 	Serial.begin(SERIAL_BAUD_RATE); // 115200 by default
-	Serial.systemDebugOutput(true); // Debug output to serial
+	Serial.systemDebugOutput(false); // Debug output to serial
 
 	
 	// mount spiffs
@@ -692,8 +773,7 @@ void init() {
 	WifiStation.waitConnection(connectOk, 20, connectFail); // We recommend 20+ seconds for connection timeout at start
 
 	mySwitch.enableTransmit(4); // RF Transmitter is connected to Arduino Pin #10
-	  mySwitch.setRepeatTransmit(20); //increase transmit repeat to avoid lost of rf sendings
-	  mySwitch.enableReceive(5);  // Receiver on inerrupt 0 => that is pin #2
-	  processTimer.initializeMs(10, process).start(); // every 20 seconds
+	mySwitch.enableReceive(5);  // Receiver on inerrupt 0 => that is pin #2
+	processTimer.initializeMs(10, process).start(); // every 10 milliseconds
 
 }

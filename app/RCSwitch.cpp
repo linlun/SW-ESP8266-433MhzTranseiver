@@ -28,77 +28,23 @@
 */
 
 #include "RCSwitch.h"
-
+#include <math.h>
 #if not defined( RCSwitchDisableReceiving )
 unsigned long long RCSwitch::nReceivedValue = 0;
 unsigned int RCSwitch::nReceivedBitlength = 0;
 unsigned int RCSwitch::nReceivedDelay = 0;
 unsigned int RCSwitch::nReceivedProtocol = 0;
-int RCSwitch::nReceiveTolerance = 60;
 #endif
 unsigned int RCSwitch::timings[RCSWITCH_MAX_CHANGES];
 uint8 RCSwitch::receiverBufferLong[14];
 
 RCSwitch::RCSwitch() {
   this->nTransmitterPin = -1;
-  this->setPulseLength(350);
-  this->setRepeatTransmit(10);
-  this->setProtocol(1);
-  #if not defined( RCSwitchDisableReceiving )
+   #if not defined( RCSwitchDisableReceiving )
   this->nReceiverInterrupt = -1;
-  this->setReceiveTolerance(60);
   RCSwitch::nReceivedValue = 0;
   #endif
 }
-
-/**
-  * Sets the protocol to send.
-  */
-void RCSwitch::setProtocol(int nProtocol) {
-  this->nProtocol = nProtocol;
-  if (nProtocol == 1){
-    this->setPulseLength(350);
-  }
-  else if (nProtocol == 2) {
-    this->setPulseLength(650);
-  }
-  else if (nProtocol == 3) {
-    this->setPulseLength(100);
-  }
-}
-
-/**
-  * Sets the protocol to send with pulse length in microseconds.
-  */
-void RCSwitch::setProtocol(int nProtocol, int nPulseLength) {
-  this->nProtocol = nProtocol;
-  this->setPulseLength(nPulseLength);
-}
-
-
-/**
-  * Sets pulse length in microseconds
-  */
-void RCSwitch::setPulseLength(int nPulseLength) {
-  this->nPulseLength = nPulseLength;
-}
-
-/**
- * Sets Repeat Transmits
- */
-void RCSwitch::setRepeatTransmit(int nRepeatTransmit) {
-  this->nRepeatTransmit = nRepeatTransmit;
-}
-
-/**
- * Set Receiving Tolerance
- */
-#if not defined( RCSwitchDisableReceiving )
-void RCSwitch::setReceiveTolerance(int nPercent) {
-  RCSwitch::nReceiveTolerance = nPercent;
-}
-#endif
-  
 
 /**
  * Enable transmissions
@@ -115,449 +61,6 @@ void RCSwitch::enableTransmit(int nTransmitterPin) {
   */
 void RCSwitch::disableTransmit() {
   this->nTransmitterPin = -1;
-}
-
-/**
- * Switch a remote switch on (Type D REV)
- *
- * @param sGroup        Code of the switch group (A,B,C,D)
- * @param nDevice       Number of the switch itself (1..3)
- */
-void RCSwitch::switchOn(char sGroup, int nDevice) {
-  this->sendTriState( this->getCodeWordD(sGroup, nDevice, true) );
-}
-
-/**
- * Switch a remote switch off (Type D REV)
- *
- * @param sGroup        Code of the switch group (A,B,C,D)
- * @param nDevice       Number of the switch itself (1..3)
- */
-void RCSwitch::switchOff(char sGroup, int nDevice) {
-  this->sendTriState( this->getCodeWordD(sGroup, nDevice, false) );
-}
-
-/**
- * Switch a remote switch on (Type C Intertechno)
- *
- * @param sFamily  Familycode (a..f)
- * @param nGroup   Number of group (1..4)
- * @param nDevice  Number of device (1..4)
-  */
-void RCSwitch::switchOn(char sFamily, int nGroup, int nDevice) {
-  this->sendTriState( this->getCodeWordC(sFamily, nGroup, nDevice, true) );
-}
-
-/**
- * Switch a remote switch off (Type C Intertechno)
- *
- * @param sFamily  Familycode (a..f)
- * @param nGroup   Number of group (1..4)
- * @param nDevice  Number of device (1..4)
- */
-void RCSwitch::switchOff(char sFamily, int nGroup, int nDevice) {
-  this->sendTriState( this->getCodeWordC(sFamily, nGroup, nDevice, false) );
-}
-
-/**
- * Switch a remote switch on (Type B with two rotary/sliding switches)
- *
- * @param nAddressCode  Number of the switch group (1..4)
- * @param nChannelCode  Number of the switch itself (1..4)
- */
-void RCSwitch::switchOn(int nAddressCode, int nChannelCode) {
-  this->sendTriState( this->getCodeWordB(nAddressCode, nChannelCode, true) );
-}
-
-/**
- * Switch a remote switch off (Type B with two rotary/sliding switches)
- *
- * @param nAddressCode  Number of the switch group (1..4)
- * @param nChannelCode  Number of the switch itself (1..4)
- */
-void RCSwitch::switchOff(int nAddressCode, int nChannelCode) {
-  this->sendTriState( this->getCodeWordB(nAddressCode, nChannelCode, false) );
-}
-
-/**
- * Switch a remote switch on (Type A with 10 pole DIP switches)
- *
- * @param sGroup        Code of the switch group (refers to DIP switches 1..5 where "1" = on and "0" = off, if all DIP switches are on it's "11111")
- * @param sDevice       Code of the switch device (refers to DIP switches 6..10 (A..E) where "1" = on and "0" = off, if all DIP switches are on it's "11111")
- */
-void RCSwitch::switchOn(char* sGroup, char* sDevice) {
-    this->sendTriState( this->getCodeWordA(sGroup, sDevice, true) );
-}
-
-/**
- * Switch a remote switch off (Type A with 10 pole DIP switches)
- *
- * @param sGroup        Code of the switch group (refers to DIP switches 1..5 where "1" = on and "0" = off, if all DIP switches are on it's "11111")
- * @param sDevice       Code of the switch device (refers to DIP switches 6..10 (A..E) where "1" = on and "0" = off, if all DIP switches are on it's "11111")
- */
-void RCSwitch::switchOff(char* sGroup, char* sDevice) {
-    this->sendTriState( this->getCodeWordA(sGroup, sDevice, false) );
-}
-
-/**
- * Returns a char[13], representing the Code Word to be send.
- * A Code Word consists of 9 address bits, 3 data bits and one sync bit but in our case only the first 8 address bits and the last 2 data bits were used.
- * A Code Bit can have 4 different states: "F" (floating), "0" (low), "1" (high), "S" (synchronous bit)
- *
- * +-------------------------------+--------------------------------+-----------------------------------------+-----------------------------------------+----------------------+------------+
- * | 4 bits address (switch group) | 4 bits address (switch number) | 1 bit address (not used, so never mind) | 1 bit address (not used, so never mind) | 2 data bits (on|off) | 1 sync bit |
- * | 1=0FFF 2=F0FF 3=FF0F 4=FFF0   | 1=0FFF 2=F0FF 3=FF0F 4=FFF0    | F                                       | F                                       | on=FF off=F0         | S          |
- * +-------------------------------+--------------------------------+-----------------------------------------+-----------------------------------------+----------------------+------------+
- *
- * @param nAddressCode  Number of the switch group (1..4)
- * @param nChannelCode  Number of the switch itself (1..4)
- * @param bStatus       Wether to switch on (true) or off (false)
- *
- * @return char[13]
- */
-char* RCSwitch::getCodeWordB(int nAddressCode, int nChannelCode, boolean bStatus) {
-   int nReturnPos = 0;
-   static char sReturn[13];
-   
-   const char* code[5] = { "FFFF", "0FFF", "F0FF", "FF0F", "FFF0" };
-   if (nAddressCode < 1 || nAddressCode > 4 || nChannelCode < 1 || nChannelCode > 4) {
-    return '\0';
-   }
-   for (int i = 0; i<4; i++) {
-     sReturn[nReturnPos++] = code[nAddressCode][i];
-   }
-
-   for (int i = 0; i<4; i++) {
-     sReturn[nReturnPos++] = code[nChannelCode][i];
-   }
-   
-   sReturn[nReturnPos++] = 'F';
-   sReturn[nReturnPos++] = 'F';
-   sReturn[nReturnPos++] = 'F';
-   
-   if (bStatus) {
-      sReturn[nReturnPos++] = 'F';
-   } else {
-      sReturn[nReturnPos++] = '0';
-   }
-   
-   sReturn[nReturnPos] = '\0';
-   
-   return sReturn;
-}
-
-/**
- * Returns a char[13], representing the Code Word to be send.
- *
- * getCodeWordA(char*, char*)
- *
- */
-char* RCSwitch::getCodeWordA(char* sGroup, char* sDevice, boolean bOn) {
-    static char sDipSwitches[13];
-    int i = 0;
-    int j = 0;
-    
-    for (i=0; i < 5; i++) {
-        if (sGroup[i] == '0') {
-            sDipSwitches[j++] = 'F';
-        } else {
-            sDipSwitches[j++] = '0';
-        }
-    }
-
-    for (i=0; i < 5; i++) {
-        if (sDevice[i] == '0') {
-            sDipSwitches[j++] = 'F';
-        } else {
-            sDipSwitches[j++] = '0';
-        }
-    }
-
-    if ( bOn ) {
-        sDipSwitches[j++] = '0';
-        sDipSwitches[j++] = 'F';
-    } else {
-        sDipSwitches[j++] = 'F';
-        sDipSwitches[j++] = '0';
-    }
-
-    sDipSwitches[j] = '\0';
-
-    return sDipSwitches;
-}
-
-/**
- * Like getCodeWord (Type C = Intertechno)
- */
-char* RCSwitch::getCodeWordC(char sFamily, int nGroup, int nDevice, boolean bStatus) {
-  static char sReturn[13];
-  int nReturnPos = 0;
-  
-  if ( (byte)sFamily < 97 || (byte)sFamily > 112 || nGroup < 1 || nGroup > 4 || nDevice < 1 || nDevice > 4) {
-    return '\0';
-  }
-  
-  char* sDeviceGroupCode =  dec2binWzerofill(  (nDevice-1) + (nGroup-1)*4, 4  );
-  char familycode[16][5] = { "0000", "F000", "0F00", "FF00", "00F0", "F0F0", "0FF0", "FFF0", "000F", "F00F", "0F0F", "FF0F", "00FF", "F0FF", "0FFF", "FFFF" };
-  for (int i = 0; i<4; i++) {
-    sReturn[nReturnPos++] = familycode[ (int)sFamily - 97 ][i];
-  }
-  for (int i = 0; i<4; i++) {
-    sReturn[nReturnPos++] = (sDeviceGroupCode[3-i] == '1' ? 'F' : '0');
-  }
-  sReturn[nReturnPos++] = '0';
-  sReturn[nReturnPos++] = 'F';
-  sReturn[nReturnPos++] = 'F';
-  if (bStatus) {
-    sReturn[nReturnPos++] = 'F';
-  } else {
-    sReturn[nReturnPos++] = '0';
-  }
-  sReturn[nReturnPos] = '\0';
-  return sReturn;
-}
-
-/**
- * Decoding for the REV Switch Type
- *
- * Returns a char[13], representing the Tristate to be send.
- * A Code Word consists of 7 address bits and 5 command data bits.
- * A Code Bit can have 3 different states: "F" (floating), "0" (low), "1" (high)
- *
- * +-------------------------------+--------------------------------+-----------------------+
- * | 4 bits address (switch group) | 3 bits address (device number) | 5 bits (command data) |
- * | A=1FFF B=F1FF C=FF1F D=FFF1   | 1=0FFF 2=F0FF 3=FF0F 4=FFF0    | on=00010 off=00001    |
- * +-------------------------------+--------------------------------+-----------------------+
- *
- * Source: http://www.the-intruder.net/funksteckdosen-von-rev-uber-arduino-ansteuern/
- *
- * @param sGroup        Name of the switch group (A..D, resp. a..d) 
- * @param nDevice       Number of the switch itself (1..3)
- * @param bStatus       Wether to switch on (true) or off (false)
- *
- * @return char[13]
- */
-
-char* RCSwitch::getCodeWordD(char sGroup, int nDevice, boolean bStatus){
-    static char sReturn[13];
-    int nReturnPos = 0;
-
-    // Building 4 bits address
-    // (Potential problem if dec2binWcharfill not returning correct string)
-    char *sGroupCode;
-    switch(sGroup){
-        case 'a':
-        case 'A':
-            sGroupCode = dec2binWcharfill(8, 4, 'F'); break;
-        case 'b':
-        case 'B':
-            sGroupCode = dec2binWcharfill(4, 4, 'F'); break;
-        case 'c':
-        case 'C':
-            sGroupCode = dec2binWcharfill(2, 4, 'F'); break;
-        case 'd':
-        case 'D':
-            sGroupCode = dec2binWcharfill(1, 4, 'F'); break;
-        default:
-            return '\0';
-    }
-    
-    for (int i = 0; i<4; i++)
-    {
-        sReturn[nReturnPos++] = sGroupCode[i];
-    }
-
-
-    // Building 3 bits address
-    // (Potential problem if dec2binWcharfill not returning correct string)
-    char *sDevice;
-    switch(nDevice) {
-        case 1:
-            sDevice = dec2binWcharfill(4, 3, 'F'); break;
-        case 2:
-            sDevice = dec2binWcharfill(2, 3, 'F'); break;
-        case 3:
-            sDevice = dec2binWcharfill(1, 3, 'F'); break;
-        default:
-            return '\0';
-    }
-
-    for (int i = 0; i<3; i++)
-        sReturn[nReturnPos++] = sDevice[i];
-
-    // fill up rest with zeros
-    for (int i = 0; i<5; i++)
-        sReturn[nReturnPos++] = '0';
-
-    // encode on or off
-    if (bStatus)
-        sReturn[10] = '1';
-    else
-        sReturn[11] = '1';
-
-    // last position terminate string
-    sReturn[12] = '\0';
-    return sReturn;
-
-}
-
-/**
- * @param sCodeWord   /^[10FS]*$/  -> see getCodeWord
- */
-void RCSwitch::sendTriState(char* sCodeWord) {
-  for (int nRepeat=0; nRepeat<nRepeatTransmit; nRepeat++) {
-    int i = 0;
-    while (sCodeWord[i] != '\0') {
-      switch(sCodeWord[i]) {
-        case '0':
-          this->sendT0();
-        break;
-        case 'F':
-          this->sendTF();
-        break;
-        case '1':
-          this->sendT1();
-        break;
-      }
-      i++;
-    }
-    this->sendSync();    
-  }
-}
-
-void RCSwitch::send(unsigned long Code, unsigned int length) {
-  this->send( this->dec2binWzerofill(Code, length) );
-}
-
-void RCSwitch::send(char* sCodeWord) {
-  for (int nRepeat=0; nRepeat<nRepeatTransmit; nRepeat++) {
-    int i = 0;
-    while (sCodeWord[i] != '\0') {
-      switch(sCodeWord[i]) {
-        case '0':
-          this->send0();
-        break;
-        case '1':
-          this->send1();
-        break;
-      }
-      i++;
-    }
-    this->sendSync();
-  }
-}
-
-void RCSwitch::transmit(int nHighPulses, int nLowPulses) {
-    #if not defined ( RCSwitchDisableReceiving )
-    boolean disabled_Receive = false;
-    int nReceiverInterrupt_backup = nReceiverInterrupt;
-    #endif
-    if (this->nTransmitterPin != -1) {
-        #if not defined( RCSwitchDisableReceiving )
-        if (this->nReceiverInterrupt != -1) {
-            this->disableReceive();
-            disabled_Receive = true;
-        }
-        #endif
-        digitalWrite(this->nTransmitterPin, HIGH);
-        delayMicroseconds( this->nPulseLength * nHighPulses);
-        digitalWrite(this->nTransmitterPin, LOW);
-        delayMicroseconds( this->nPulseLength * nLowPulses);
-        
-        #if not defined( RCSwitchDisableReceiving )
-        if(disabled_Receive){
-            this->enableReceive(nReceiverInterrupt_backup);
-        }
-        #endif
-    }
-}
-/**
- * Sends a "0" Bit
- *                       _    
- * Waveform Protocol 1: | |___
- *                       _  
- * Waveform Protocol 2: | |__
- */
-void RCSwitch::send0() {
-    if (this->nProtocol == 1){
-        this->transmit(1,3);
-    }
-    else if (this->nProtocol == 2) {
-        this->transmit(1,2);
-    }
-    else if (this->nProtocol == 3) {
-        this->transmit(4,11);
-    }
-}
-
-/**
- * Sends a "1" Bit
- *                       ___  
- * Waveform Protocol 1: |   |_
- *                       __  
- * Waveform Protocol 2: |  |_
- */
-void RCSwitch::send1() {
-      if (this->nProtocol == 1){
-        this->transmit(3,1);
-    }
-    else if (this->nProtocol == 2) {
-        this->transmit(2,1);
-    }
-    else if (this->nProtocol == 3) {
-        this->transmit(9,6);
-    }
-}
-
-
-/**
- * Sends a Tri-State "0" Bit
- *            _     _
- * Waveform: | |___| |___
- */
-void RCSwitch::sendT0() {
-  this->transmit(1,3);
-  this->transmit(1,3);
-}
-
-/**
- * Sends a Tri-State "1" Bit
- *            ___   ___
- * Waveform: |   |_|   |_
- */
-void RCSwitch::sendT1() {
-  this->transmit(3,1);
-  this->transmit(3,1);
-}
-
-/**
- * Sends a Tri-State "F" Bit
- *            _     ___
- * Waveform: | |___|   |_
- */
-void RCSwitch::sendTF() {
-  this->transmit(1,3);
-  this->transmit(3,1);
-}
-
-/**
- * Sends a "Sync" Bit
- *                       _
- * Waveform Protocol 1: | |_______________________________
- *                       _
- * Waveform Protocol 2: | |__________
- */
-void RCSwitch::sendSync() {
-
-    if (this->nProtocol == 1){
-        this->transmit(1,31);
-    }
-    else if (this->nProtocol == 2) {
-        this->transmit(1,10);
-    }
-    else if (this->nProtocol == 3) {
-        this->transmit(1,71);
-    }
 }
 
 #if not defined( RCSwitchDisableReceiving )
@@ -615,6 +118,172 @@ unsigned int* RCSwitch::getReceivedRawdata() {
 
 uint8* RCSwitch::getReceivedLongdata() {
     return RCSwitch::receiverBufferLong;
+}
+
+bool RCSwitch::getReceivedJSON(JsonObject& json)
+{
+	float windspeed_avg;
+	float windspeed_max;
+	uint8 humidity;
+	sint16 temp;
+	float winddirection;
+	uint8 addr;
+	uint8 sign;
+	float temp2;
+	uint8 battery;
+	float rain;
+	uint8 crc;
+	uint8 byte0;
+	uint8 byte1;
+	uint8 byte2;
+	switch (this->nReceivedProtocol)
+	{
+	case IR_PROTOCOL_NEXA2:
+
+		json["id"] = (unsigned long)(nReceivedValue&0x3FFFFFF); //26 bit id
+		json["group"] = (uint8)((((nReceivedValue>>26)&0x1) == 1)? 0u:1u);
+		json["switch"] = (uint8)((((nReceivedValue>>27)&0x1) == 1)? 0u:1u);
+		byte0 = (uint8)((nReceivedValue>>28)&0xF);
+		if (byte0 & 1)
+			byte0 ^= 0xf;
+		json["button"] = byte0;
+		byte0 = (uint8)((nReceivedValue>>32)&0xFF);
+		switch (byte0)
+		{
+		case 15:
+			byte0 = 1;
+			break;
+		case 7:
+			byte0 = 2;
+			break;
+		case 11:
+			byte0 = 3;
+			break;
+		case 3:
+			byte0 = 4;
+			break;
+		case 13:
+			byte0 = 5;
+			break;
+		case 5:
+			byte0 = 6;
+			break;
+		case 9:
+			byte0 = 7;
+			break;
+		case 1:
+			byte0 = 8;
+			break;
+		case 14:
+			byte0 = 9;
+			break;
+		case 6:
+			byte0 = 10;
+			break;
+		case 10:
+			byte0 = 11;
+			break;
+		case 2:
+			byte0 = 12;
+			break;
+		case 12:
+			byte0 = 13;
+			break;
+		case 4:
+			byte0 = 14;
+			break;
+		case 8:
+			byte0 = 15;
+			break;
+		default:
+			break;
+		}
+		json["dimmer"] = byte0;
+		break;
+	case IR_PROTOCOL_RUBICSONSTN:
+		/*
+			  aaaaaaaa 0dddsttt tttttttt hhhhhhhh wwwwwwww wwwwwwww
+			0b11111001 11111001 00001100 10110010 11100011 01101111
+		a = address = winddirection, s = sign, t = temperature, h = humidity, w = vindspeed
+		*/
+		windspeed_avg = (receiverBufferLong[4] & 0xFF)*0.8f;
+		windspeed_max = (receiverBufferLong[5] & 0xFF)*0.8f;
+		//var crc = data&0xFF;
+		humidity = receiverBufferLong[3]&0xFF;
+		temp = ((receiverBufferLong[1]&0x0F)<<8) + receiverBufferLong[2];
+		winddirection = (((receiverBufferLong[1])>>4)&0x7)*360.0f/8;
+		addr = receiverBufferLong[0];
+		sign = (temp>>11)&1;
+		if (sign > 0)
+		{
+		temp = temp^0xFFF;
+		temp += 1;
+		temp = -temp;
+		}
+		temp2 = temp/10.0f;
+		/*
+			aaaaaaaa 1------- -------b rrrrrrrr rrrrrrrr rrrrrrrr
+		  0b11111001 11111001 00001100 10110010 11100011 01101111
+		a = address b = battery empty, r = rain
+		*/
+		battery = receiverBufferLong[8] & 0x1;
+		//var crc = data&0xFF;
+		rain = 0.4f*((receiverBufferLong[9]*65536)+(receiverBufferLong[10]*256)+(receiverBufferLong[11]));
+		json["avgWind"] = windspeed_avg;
+		json["maxWind"] = windspeed_max;
+		json["direction"] = winddirection;
+		json["temperature"] = temp2;
+		json["humidity"] = humidity;
+		json["rain"] = rain;
+		if (battery)
+		{
+			json["battery"] = "LOW";
+		} else
+		{
+			json["battery"] = "OK";
+		}
+		json["address"] = addr;
+		break;
+	case IR_PROTOCOL_RUBICSON:
+		/*
+				  ??? aaaaaaaa sttt tttttttt hhhhhhhh cccccccc
+		341731651126	0b100 11111001 000011001011 00101110 00110110	20.3 46%
+		a = address, s = sign, t = temperature, h = humidity, c = crc
+		*/
+		crc = nReceivedValue&0xFF;
+		humidity = (nReceivedValue>>8)&0xFF;
+		temp = (nReceivedValue>>16)&0xFFF;
+		addr = (nReceivedValue>>28)&0x3;
+		//var calccrc=crc8(rshift(data,8), 32);
+		sign = (temp>>11)&1;
+		if (sign > 0)
+		{
+			temp = temp^0xFFF;
+			temp += 1;
+			temp = -temp;
+		}
+		temp2 = temp/10;
+
+		json["temperature"] = temp2;
+		json["humidity"] = humidity;
+		json["crc"] = crc;
+		json["address"] = addr;
+		break;
+	case IR_PROTOCOL_VIKINGSTEAK:
+		addr = (nReceivedValue>>4)&0xFF;
+		byte0 = (nReceivedValue>>32)&0xF;
+		byte1 = (nReceivedValue>>28)&0xF;
+		byte2 = (nReceivedValue>>24)&0xF;
+		temp2 = roundf((float)(((((byte1^byte2)<<8)+((byte0^byte1)<<4)+byte0^10)-122)*5.0f)/9.0f);
+		json["temperature"] = temp2;
+		json["address"] = addr;
+		break;
+	default:
+		return false;
+		break;
+	}
+	json["protocol"] = this->nReceivedProtocol;
+	return true;
 }
 /**
  *
@@ -738,46 +407,24 @@ bool RCSwitch::receiveProtocol3(unsigned int changeCount){
  * Test data on NEXA protocol
  * http://elektronikforumet.com/wiki/index.php?title=RF_Protokoll_-_Nexa_sj%C3%A4lvl%C3%A4rande
  * http://pastebin.com/PJX3bRAs
- * 
- * @param buf
- * 		Pointer to buffer to where to data to parse is stored
- * @param len
- * 		Length of the data
- * @param proto
- * 		Pointer to protocol information
- * @return
- * 		IR_OK if data parsed successfully, one of several errormessages if not
  */
-#define INCREMENT(nr, maxValue) ((nr)==((maxValue)-1)?(0):((nr)+1))
-#define DECREMENT(nr, maxValue) ((nr)==(0)?((maxValue)-1):((nr)-1))
-#define INDEX_ADD(value, add, max)	((((value) + (add))<=(max))?((value) + (add)):((value) + (add) - (max)))
-#define INDEX_SUBTRACT(value, sub, max)	((((value) - (sub))> 0)?((value) - (sub)):((value) - (sub) + (max)))
-
-
-bool RCSwitch::receiveProtocol4(unsigned int changeCount){
+bool RCSwitch::receiveProtocolNexa2(unsigned int changeCount){
 	/* check if we have correct amount of data */ 
-	if (changeCount != 131) {
-		RCSwitch::nReceivedDelay = 1;
+	if (!(changeCount == 131 || changeCount == 147)) {
 		return false;
 	}
 	uint16 i;
 	i=0;
 	
 	if ((RCSwitch::timings[i] < IR_NEXA2_START1 - IR_NEXA2_START1/IR_NEXA2_TOL_DIV) || (RCSwitch::timings[i] > IR_NEXA2_START1 + IR_NEXA2_START1/IR_NEXA2_TOL_DIV)) { //check start bit;
-	RCSwitch::nReceivedDelay = 2;
-	RCSwitch::nReceivedProtocol = RCSwitch::timings[i];
 		return false;
 	}
 	i++;
 	if ((RCSwitch::timings[i] < IR_NEXA2_HIGH - IR_NEXA2_HIGH/IR_NEXA2_TOL_DIV) || (RCSwitch::timings[i] > IR_NEXA2_HIGH + IR_NEXA2_HIGH/IR_NEXA2_TOL_DIV)) { //check start bit
-	RCSwitch::nReceivedDelay = 3;
-	RCSwitch::nReceivedProtocol = RCSwitch::timings[i];
 		return false;
 	}
 	i++;
 	if ((RCSwitch::timings[i] < IR_NEXA2_START2 - IR_NEXA2_START2/IR_NEXA2_TOL_DIV) || (RCSwitch::timings[i] > IR_NEXA2_START2 + IR_NEXA2_START2/IR_NEXA2_TOL_DIV)) { //check start bit
-	RCSwitch::nReceivedDelay = 4;
-	RCSwitch::nReceivedProtocol = RCSwitch::timings[i];
 		return false;
 	}
 	i++;
@@ -787,7 +434,10 @@ bool RCSwitch::receiveProtocol4(unsigned int changeCount){
 	uint8 bitCounterAll = 0;
 	uint8 bitCounter = 0;
 	uint8 i2;
-	for (i2 = 0; i2 < 127; i2++) {
+	uint8 endvalue = 127;
+	if (changeCount == 147)
+		endvalue = 143;
+	for (i2 = 0; i2 < endvalue; i2++) {
 		i++;
 		if ((i2&1) == 0) {		/* if even, data */
 			if ((bitCounterAll&1) == 0)
@@ -799,23 +449,14 @@ bool RCSwitch::receiveProtocol4(unsigned int changeCount){
 				} else if ((RCSwitch::timings[i] > IR_NEXA2_LOW_ZERO - IR_NEXA2_LOW_ZERO/IR_NEXA2_TOL_DIV) && (RCSwitch::timings[i] < IR_NEXA2_LOW_ZERO + IR_NEXA2_LOW_ZERO/IR_NEXA2_TOL_DIV)) {
 					/* do nothing, a zero is already in rawbits */
 				} else {
-					RCSwitch::nReceivedDelay = 5;
-					RCSwitch::nReceivedProtocol = RCSwitch::timings[i];
-					RCSwitch::nReceivedBitlength = i;
 					return false;
 				}
 				bitCounterValue = bitCounterValue + bitCounterValue;
 				bitCounter++;
 			}
 			bitCounterAll++;
-			//i=INCREMENT(i,MAX_NR_TIMES);
-			//i=INCREMENT(i,MAX_NR_TIMES);
-			//i+=2; 	// skip every other bit, implement check here in the future
 		} else {			/* if odd, no data */
 			if ((RCSwitch::timings[i] < IR_NEXA2_HIGH - IR_NEXA2_HIGH/IR_NEXA2_TOL_DIV) || (RCSwitch::timings[i] > IR_NEXA2_HIGH + IR_NEXA2_HIGH/IR_NEXA2_TOL_DIV)) {
-				RCSwitch::nReceivedDelay = 6;
-				RCSwitch::nReceivedProtocol = RCSwitch::timings[i];
-				RCSwitch::nReceivedBitlength = i;
 				return false;
 			}
 		}
@@ -823,21 +464,17 @@ bool RCSwitch::receiveProtocol4(unsigned int changeCount){
 	RCSwitch::nReceivedValue = (unsigned long long)rawbitsTemp;
 	RCSwitch::nReceivedBitlength = changeCount / 2;
 	RCSwitch::nReceivedDelay = 100;
-	RCSwitch::nReceivedProtocol = 4;
+	RCSwitch::nReceivedProtocol = IR_PROTOCOL_NEXA2;
 	return true;
 }
 
 
-bool RCSwitch::receiveProtocol5(unsigned int changeCount){
+bool RCSwitch::receiveProtocolRubicsonStation(unsigned int changeCount){
 	/* check if we have correct amount of data */ 
 	if (changeCount < 224) {
-			RCSwitch::nReceivedDelay = 1;
 		return false;
 	}
 	uint8 bitIndex, byteIndex;
-
-	//uint64 rawbitsTemp = 0;//0xffffffffffffffff;
-	//receiverBufferLong[14];
 
 	/* Check start bit condition */
 	uint16 i,i2;
@@ -851,8 +488,6 @@ bool RCSwitch::receiveProtocol5(unsigned int changeCount){
 			i++;
 			if (((RCSwitch::timings[i] < IR_RUBICSONSTN_LOW_START - IR_RUBICSONSTN_LOW_START/IR_RUBICSONSTN_TOL_DIV) || (RCSwitch::timings[i] > IR_RUBICSONSTN_LOW_START + IR_RUBICSONSTN_LOW_START/IR_RUBICSONSTN_TOL_DIV)) || ((RCSwitch::timings[i+1] < IR_RUBICSONSTN_HIGH - IR_RUBICSONSTN_HIGH/IR_RUBICSONSTN_TOL_DIV) || (RCSwitch::timings[i+1] > IR_RUBICSONSTN_HIGH + IR_RUBICSONSTN_HIGH/IR_RUBICSONSTN_TOL_DIV)))
 			{
-				RCSwitch::nReceivedDelay = 2;
-				RCSwitch::nReceivedProtocol = RCSwitch::timings[i];
 				return false;
 			}
 		}
@@ -866,9 +501,6 @@ bool RCSwitch::receiveProtocol5(unsigned int changeCount){
 		{		/* if odd, no data */
 			if ((RCSwitch::timings[i] < IR_RUBICSONSTN_HIGH - IR_RUBICSONSTN_HIGH/IR_RUBICSONSTN_TOL_DIV) || (RCSwitch::timings[i] > IR_RUBICSONSTN_HIGH + IR_RUBICSONSTN_HIGH/IR_RUBICSONSTN_TOL_DIV))
 			{
-				RCSwitch::nReceivedDelay = 3;
-				RCSwitch::nReceivedProtocol = RCSwitch::timings[i];
-				RCSwitch::nReceivedBitlength = i;
 				return false;
 			}
 		} 
@@ -890,9 +522,6 @@ bool RCSwitch::receiveProtocol5(unsigned int changeCount){
 			}
 			else 
 			{
-				RCSwitch::nReceivedDelay = 4;
-					RCSwitch::nReceivedProtocol = RCSwitch::timings[i];
-					RCSwitch::nReceivedBitlength = i;
 				return false;
 			}
 			if (bitIndex == 8)
@@ -903,50 +532,150 @@ bool RCSwitch::receiveProtocol5(unsigned int changeCount){
 		}
 		i++;
 	}
-	//rawbitsTemp = ~rawbitsTemp;
-	//rawbitsTemp = rawbitsTemp&0xFFFFFFFFFF;
-	
-	
-	RCSwitch::nReceivedDelay = 5;
-	RCSwitch::nReceivedProtocol = RCSwitch::timings[i];
-	RCSwitch::nReceivedBitlength = i;
 	/*
-					Protokollet verkar vara såhär:
-14 bytes skickas ut från sensorn (ca 45 sekunders mellanrum), som jag har tolkat det så är dessa bytes uppdelade på detta vis (varje tecken motsvarar en bit):
-ssssssss iiiiiiii iiiiiiii 0000000b ddd0tttt tttttttt hhhhhhhh aaaaaaaa mmmmmmmm rrrrrrrr rrrrrrrr rrrrrrrr cccccccc cccccccc
-s = Startbyte, alltid 0xF5
-i = Id, dessa två byte verkar slumpmässigt valda varje gång man byter batteri
-b = Flagga för lågt batteri, 0=OK, 1=Low bat
-d = Tre bitar med vindriktning (8 riktningar, 0 = Nord)
-t = Temperatur, kodat i 1/10 grader, Ex: 0x104 = 260 = 26.0 grader, har ej testat minusgrader, men gissar på att det skrivs som 2-komplementet.
-h = Luftfuktighet, Ex: 0x23 = 35 = 35%
-a = Medelvindhastighet, Ex: 0x06 = 6 = 6 * 0.8 = 4.8m/s
-m = Max vindhastighet, Ex: 0x06 = 6 = 6 * 0.8 = 4.8m/s
-r = Regnmängd, gissar på att inte alla byte används för detta, möjligt att någon medelregnmängd finns med här. Men iaf lägsta delen är antalet vipp som sensorn gjort sendan start, varje vipp motsvarar 0.4mm regn.
-c = CRC, Vet ej hur denna räknas ut.
-*/
-//printf("d %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X\n", receiverBufferLong[0],receiverBufferLong[1],receiverBufferLong[2],receiverBufferLong[3],receiverBufferLong[4],receiverBufferLong[5],receiverBufferLong[6],receiverBufferLong[7],receiverBufferLong[8],receiverBufferLong[9],receiverBufferLong[10],receiverBufferLong[11],receiverBufferLong[12],receiverBufferLong[13]);
-
-//TODO: This data packageing shall be done inte the protocol decoding and not here
-RCSwitch::receiverBufferLong[0] = RCSwitch::receiverBufferLong[1] ^ RCSwitch::receiverBufferLong[2];
-RCSwitch::receiverBufferLong[1] = (RCSwitch::receiverBufferLong[4] & 0x0Fu) + ((RCSwitch::receiverBufferLong[4] & 0xE0u)>>1); 
-RCSwitch::receiverBufferLong[2] = RCSwitch::receiverBufferLong[5]; 
-RCSwitch::receiverBufferLong[4] = RCSwitch::receiverBufferLong[7]; 
-RCSwitch::receiverBufferLong[5] = RCSwitch::receiverBufferLong[8];
-
-RCSwitch::receiverBufferLong[8] = RCSwitch::receiverBufferLong[3]; 
-RCSwitch::receiverBufferLong[3] = RCSwitch::receiverBufferLong[6]; 
-
-RCSwitch::receiverBufferLong[6] = RCSwitch::receiverBufferLong[0];
-RCSwitch::receiverBufferLong[7] = 0x80; //Second packet 
-RCSwitch::receiverBufferLong[9] = RCSwitch::receiverBufferLong[9]; 
-RCSwitch::receiverBufferLong[10] = RCSwitch::receiverBufferLong[10]; 
-RCSwitch::receiverBufferLong[11] = RCSwitch::receiverBufferLong[11];
+	Protokollet verkar vara såhär:
+	14 bytes skickas ut från sensorn (ca 45 sekunders mellanrum), som jag har tolkat det så är dessa bytes uppdelade på detta vis (varje tecken motsvarar en bit):
+	ssssssss iiiiiiii iiiiiiii 0000000b ddd0tttt tttttttt hhhhhhhh aaaaaaaa mmmmmmmm rrrrrrrr rrrrrrrr rrrrrrrr cccccccc cccccccc
+	s = Startbyte, alltid 0xF5
+	i = Id, dessa två byte verkar slumpmässigt valda varje gång man byter batteri
+	b = Flagga för lågt batteri, 0=OK, 1=Low bat
+	d = Tre bitar med vindriktning (8 riktningar, 0 = Nord)
+	t = Temperatur, kodat i 1/10 grader, Ex: 0x104 = 260 = 26.0 grader, har ej testat minusgrader, men gissar på att det skrivs som 2-komplementet.
+	h = Luftfuktighet, Ex: 0x23 = 35 = 35%
+	a = Medelvindhastighet, Ex: 0x06 = 6 = 6 * 0.8 = 4.8m/s
+	m = Max vindhastighet, Ex: 0x06 = 6 = 6 * 0.8 = 4.8m/s
+	r = Regnmängd, gissar på att inte alla byte används för detta, möjligt att någon medelregnmängd finns med här. Men iaf lägsta delen är antalet vipp som sensorn gjort sendan start, varje vipp motsvarar 0.4mm regn.
+	c = CRC, Vet ej hur denna räknas ut.
+	*/
+	RCSwitch::receiverBufferLong[0] = RCSwitch::receiverBufferLong[1] ^ RCSwitch::receiverBufferLong[2];
+	RCSwitch::receiverBufferLong[1] = (RCSwitch::receiverBufferLong[4] & 0x0Fu) + ((RCSwitch::receiverBufferLong[4] & 0xE0u)>>1);
+	RCSwitch::receiverBufferLong[2] = RCSwitch::receiverBufferLong[5];
+	RCSwitch::receiverBufferLong[4] = RCSwitch::receiverBufferLong[7];
+	RCSwitch::receiverBufferLong[5] = RCSwitch::receiverBufferLong[8];
+	
+	RCSwitch::receiverBufferLong[8] = RCSwitch::receiverBufferLong[3];
+	RCSwitch::receiverBufferLong[3] = RCSwitch::receiverBufferLong[6];
+	
+	RCSwitch::receiverBufferLong[6] = RCSwitch::receiverBufferLong[0];
+	RCSwitch::receiverBufferLong[7] = 0x80; //Second packet
+	//RCSwitch::receiverBufferLong[9] = RCSwitch::receiverBufferLong[9];
+	//RCSwitch::receiverBufferLong[10] = RCSwitch::receiverBufferLong[10];
+	//RCSwitch::receiverBufferLong[11] = RCSwitch::receiverBufferLong[11];
 	
 	RCSwitch::nReceivedValue = (unsigned long long)(123456789);
 	RCSwitch::nReceivedBitlength = changeCount / 2;
 	RCSwitch::nReceivedDelay = 100;
-	RCSwitch::nReceivedProtocol = 5;
+	RCSwitch::nReceivedProtocol = IR_PROTOCOL_RUBICSONSTN;
+	return true;
+}
+
+
+/**
+ * Test data on Rubicson temperature sensor protocol
+ *
+ */
+
+bool RCSwitch::receiveProtocolRubicsonTemperature(unsigned int changeCount){
+	/* check if we have correct amount of data */
+	if (changeCount != 73) {
+		return false;
+	}
+
+	uint8 i, i2;
+	uint64 rawbitsTemp = 0;
+
+	i=0;
+	if ((RCSwitch::timings[i] < IR_RUBICSON_LOW_START - IR_RUBICSON_LOW_START/IR_RUBICSON_TOL_DIV) || (RCSwitch::timings[i] > IR_RUBICSON_LOW_START + IR_RUBICSON_LOW_START/IR_RUBICSON_TOL_DIV))
+	{
+		return false;
+	}
+
+	for (i = 1; i < 74; i++)
+	{
+		if ((i&1) != 0)
+		{		/* if odd, no data */
+			if ((RCSwitch::timings[i] < IR_RUBICSON_HIGH - IR_RUBICSON_HIGH/IR_RUBICSON_TOL_DIV) || (RCSwitch::timings[i] > IR_RUBICSON_HIGH + IR_RUBICSON_HIGH/IR_RUBICSON_TOL_DIV))
+			{
+				return false;
+			}
+		}
+		else
+		{	/* if even, data */
+			/* check length of transmit pulse */
+			if ((RCSwitch::timings[i] > IR_RUBICSON_LOW_ONE - IR_RUBICSON_LOW_ONE/IR_RUBICSON_TOL_DIV) && (RCSwitch::timings[i] < IR_RUBICSON_LOW_ONE + IR_RUBICSON_LOW_ONE/IR_RUBICSON_TOL_DIV))
+			{
+				/* write a one */
+				rawbitsTemp = rawbitsTemp<<1;
+				rawbitsTemp |= 1;
+			}
+			else if ((RCSwitch::timings[i] > IR_RUBICSON_LOW_ZERO - IR_RUBICSON_LOW_ZERO/IR_RUBICSON_TOL_DIV) && (RCSwitch::timings[i] < IR_RUBICSON_LOW_ZERO + IR_RUBICSON_LOW_ZERO/IR_RUBICSON_TOL_DIV))
+			{
+				/* do nothing, a zero is already in rawbits */
+				rawbitsTemp = rawbitsTemp<<1;
+			}
+			else
+			{
+				return false;
+			}
+		}
+	}
+	RCSwitch::nReceivedValue = (unsigned long long)rawbitsTemp;
+	RCSwitch::nReceivedBitlength = changeCount / 2;
+	RCSwitch::nReceivedDelay = 100;
+	RCSwitch::nReceivedProtocol = IR_PROTOCOL_RUBICSON;
+	return true;
+}
+
+
+/**
+ * Test data on Viking steak temperature sensor protocol
+ */
+bool RCSwitch::receiveProtocolVikingSteak(unsigned int changeCount){
+	/* check if we have correct amount of data */
+	if (changeCount != 73) {
+		return false;
+	}
+	uint8 i, i2;
+	uint64 rawbitsTemp = 0;
+	i=0;
+	if ((RCSwitch::timings[i] < IR_VIKING_STEAK_LOW_START - IR_VIKING_STEAK_LOW_START/IR_VIKING_STEAK_TOL_DIV) || (RCSwitch::timings[i] > IR_VIKING_STEAK_LOW_START + IR_VIKING_STEAK_LOW_START/IR_VIKING_STEAK_TOL_DIV))
+	{
+		return false;
+	}
+
+	for (i = 1; i < 74; i++)
+	{
+		if ((i&1) != 0)
+		{		/* if odd, no data */
+			if ((RCSwitch::timings[i] < IR_VIKING_STEAK_HIGH - IR_VIKING_STEAK_HIGH/IR_VIKING_STEAK_TOL_DIV) || (RCSwitch::timings[i] > IR_VIKING_STEAK_HIGH + IR_VIKING_STEAK_HIGH/IR_VIKING_STEAK_TOL_DIV))
+			{
+				return false;
+			}
+		}
+		else
+		{	/* if even, data */
+			/* check length of transmit pulse */
+			if ((RCSwitch::timings[i] > IR_VIKING_STEAK_LOW_ONE - IR_VIKING_STEAK_LOW_ONE/IR_VIKING_STEAK_TOL_DIV) && (RCSwitch::timings[i] < IR_VIKING_STEAK_LOW_ONE + IR_VIKING_STEAK_LOW_ONE/IR_VIKING_STEAK_TOL_DIV))
+			{
+				/* write a one */
+				rawbitsTemp = rawbitsTemp<<1;
+				rawbitsTemp |= 1;
+			}
+			else if ((RCSwitch::timings[i] > IR_VIKING_STEAK_LOW_ZERO - IR_VIKING_STEAK_LOW_ZERO/IR_VIKING_STEAK_TOL_DIV) && (RCSwitch::timings[i] < IR_VIKING_STEAK_LOW_ZERO + IR_VIKING_STEAK_LOW_ZERO/IR_VIKING_STEAK_TOL_DIV))
+			{
+				/* do nothing, a zero is already in rawbits */
+				rawbitsTemp = rawbitsTemp<<1;
+			}
+			else
+			{
+				return false;
+			}
+		}
+	}
+	RCSwitch::nReceivedValue = (unsigned long long)rawbitsTemp;
+	RCSwitch::nReceivedBitlength = changeCount / 2;
+	RCSwitch::nReceivedDelay = 100;
+	RCSwitch::nReceivedProtocol = IR_PROTOCOL_VIKINGSTEAK;
 	return true;
 }
 
@@ -956,106 +685,39 @@ void RCSwitch::handleInterrupt() {
   static unsigned int changeCount;
   static unsigned long lastTime;
   static unsigned int repeatCount;
-  
 
   long time = micros();
   duration = time - lastTime;
   
-  //if (RCSwitch::nReceivedValue == NULL)
-  {
-	  
   if (duration < 170) {
     changeCount = 0;
 	repeatCount = 0;
-  } else if (duration > 5000 && changeCount > 80) {
+  } else if (duration > 4500 && changeCount > 60) {
     repeatCount++;
     changeCount--;
     if (repeatCount == 1) {
 	  RCSwitch::nReceivedValue = changeCount;
-	  if (!receiveProtocol4(changeCount))
-		if (!receiveProtocol5(changeCount))
-		  ;
+	  RCSwitch::nReceivedProtocol = 0;
+	  if (!receiveProtocolNexa2(changeCount))
+		if (!receiveProtocolRubicsonStation(changeCount))
+		  if (!receiveProtocolRubicsonTemperature(changeCount))
+		    if (!receiveProtocolVikingSteak(changeCount))
+		      ;
       repeatCount = 0;
     }
     changeCount = 0;
-  } else if (duration > 5000) {
+  } else if (duration > 4500) {
     changeCount = 0;
   }
 
-   /*
-  if (duration > 5000 && duration > RCSwitch::timings[0] - 200 && duration < RCSwitch::timings[0] + 200) {
-    repeatCount++;
-    changeCount--;
-    if (repeatCount == 1) {
-	  RCSwitch::nReceivedValue = changeCount;
-      repeatCount = 0;
-    }
-    changeCount = 0;
-  } else if (duration > 5000) {
-    changeCount = 0;
-  }
-  */
- /*
-  if (duration > 3000 && duration > RCSwitch::timings[0] - 200 && duration < RCSwitch::timings[0] + 200) {
-    repeatCount++;
-    changeCount--;
-    if (repeatCount == 1) {
-	  RCSwitch::nReceivedValue = changeCount;
-	  //Serial.println("Got data with lenght %d", changeCount);
-      *//*
-	  if (receiveProtocol1(changeCount) == false){
-        if (receiveProtocol2(changeCount) == false){
-          if (receiveProtocol3(changeCount) == false){
-            //failed
-          }
-        }
-      }
-	  *//*
-      repeatCount = 0;
-    }
-    changeCount = 0;
-  } else if (duration > 3000) {
-    changeCount = 0;
-  }
- */
   if (changeCount >= RCSWITCH_MAX_CHANGES) {
     changeCount = 0;
     repeatCount = 0;
   }
   
   RCSwitch::timings[changeCount++] = duration;
-  }
   lastTime = time;  
 }
 #endif
-
-/**
-  * Turns a decimal value to its binary representation
-  */
-char* RCSwitch::dec2binWzerofill(unsigned long Dec, unsigned int bitLength){
-    return dec2binWcharfill(Dec, bitLength, '0');
-}
-
-char* RCSwitch::dec2binWcharfill(unsigned long Dec, unsigned int bitLength, char fill){
-  static char bin[64];
-  unsigned int i=0;
-
-  while (Dec > 0) {
-    bin[32+i++] = ((Dec & 1) > 0) ? '1' : fill;
-    Dec = Dec >> 1;
-  }
-
-  for (unsigned int j = 0; j< bitLength; j++) {
-    if (j >= bitLength - i) {
-      bin[j] = bin[ 31 + i - (j - (bitLength - i)) ];
-    }else {
-      bin[j] = fill;
-    }
-  }
-  bin[bitLength] = '\0';
-  
-  return bin;
-}
-
 
 

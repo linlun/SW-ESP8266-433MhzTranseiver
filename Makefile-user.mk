@@ -28,7 +28,7 @@
 # COM_PORT = /dev/tty.usbserial
 
 ## Com port speed
-COM_SPEED	= 115200
+COM_SPEED	= 256000
 #115200
 
 ## Configure flash parameters (for ESP12-E and other new boards):
